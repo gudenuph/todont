@@ -1,53 +1,90 @@
 #!/usr/bin/env bash
 #
-# Build locally and push to the server. Run from the repo root:
+# Push the tracker to the host and rebuild its container. Run from the repo root:
 #
 #   deploy/deploy.sh [user@host]
 #
-# Defaults to root@bugs.ezmuze.studio. Assumes deploy/setup-server.sh has
-# already run there once.
+# The image is built on the server, so nothing here depends on the host's own
+# Node (which is 16, older than the app needs).
 set -euo pipefail
 
-TARGET="${1:-root@bugs.ezmuze.studio}"
-APP_DIR=/opt/todont-tracker
-APP_USER=todont
+TARGET="${1:-root@your-host}"
+SSH_KEY="${SSH_KEY:-$HOME/.ssh/id_todont_deploy}"
+SRC_DIR=/root/todont-tracker
+STATE_DIR=$STATE_DIR
+
+SSH=(ssh -i "$SSH_KEY" -o BatchMode=yes "$TARGET")
 
 say() { printf '\n\033[1;36m==> %s\033[0m\n' "$1"; }
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-say "Building"
-npm ci --workspaces --include-workspace-root
-npm run build
+say "Preparing $TARGET"
+# The container runs as the image's `node` user (uid 1000). A bind mount keeps
+# the host's ownership, so the data directory has to be owned by that uid or
+# SQLite cannot create its database.
+"${SSH[@]}" "mkdir -p $SRC_DIR $STATE_DIR/data/uploads && chown -R 1000:1000 $STATE_DIR/data"
 
-[[ -f server/dist/index.js ]] || { echo "server build missing" >&2; exit 1; }
-[[ -f web/dist/index.html ]] || { echo "web build missing" >&2; exit 1; }
-
-say "Pushing to $TARGET:$APP_DIR"
-ssh "$TARGET" "mkdir -p $APP_DIR/server $APP_DIR/web"
-
-# Only what the service actually runs: compiled output, the SPA, and the
-# production dependency tree. No sources, no dev tooling, no data.
-rsync -az --delete server/dist/          "$TARGET:$APP_DIR/server/dist/"
-rsync -az --delete web/dist/             "$TARGET:$APP_DIR/web/dist/"
-rsync -az            server/package.json "$TARGET:$APP_DIR/server/package.json"
-rsync -az            package.json        "$TARGET:$APP_DIR/package.json"
-rsync -az --delete   deploy/             "$TARGET:$APP_DIR/deploy/"
-
-say "Installing production dependencies on the server"
-# better-sqlite3 is native; --omit=dev keeps the toolchain off the box but the
-# prebuilt binary still has to be fetched for the server's own Node version.
-ssh "$TARGET" "cd $APP_DIR/server && npm install --omit=dev --no-audit --no-fund --ignore-scripts=false"
-
-say "Restarting the service"
-ssh "$TARGET" "chown -R $APP_USER:$APP_USER $APP_DIR && systemctl restart todont-tracker && sleep 2 && systemctl is-active todont-tracker"
-
-say "Health check"
-if ssh "$TARGET" "curl -fsS http://127.0.0.1:4310/api/health"; then
-  printf '\n\033[1;32mDeployed.\033[0m\n'
+# First run only: seed the env file with a generated cookie secret. Never
+# overwrite it — that would sign every existing session out.
+"${SSH[@]}" bash -s <<EOF
+set -e
+if [ ! -f $STATE_DIR/tracker.env ]; then
+  SECRET="\$(openssl rand -base64 48 | tr -d '\n')"
+  cat > $STATE_DIR/tracker.env <<ENV
+NODE_ENV=production
+HOST=0.0.0.0
+PORT=4310
+PUBLIC_URL=https://bugs.ezmuze.studio
+DATA_DIR=/data
+SERVE_WEB=true
+WEB_DIST=/app/web/dist
+COOKIE_SECRET=\$SECRET
+COOKIE_SECURE=true
+SESSION_DAYS=30
+ADMIN_EZMUZE_USER_IDS=
+MAX_UPLOAD_BYTES=10485760
+MAX_UPLOADS_PER_BUG=10
+LOG_LEVEL=info
+ENV
+  chmod 600 $STATE_DIR/tracker.env
+  echo "wrote $STATE_DIR/tracker.env with a generated COOKIE_SECRET"
 else
-  echo
-  echo "The service did not answer. Recent logs:" >&2
-  ssh "$TARGET" "journalctl -u todont-tracker -n 40 --no-pager" >&2
-  exit 1
+  echo "$STATE_DIR/tracker.env already exists — left alone"
 fi
+EOF
+
+say "Syncing source"
+# tar over ssh rather than rsync: this has to run from Git Bash on Windows too,
+# where rsync is not present. The source directory holds nothing but a copy of
+# the repo, so replacing it wholesale is safe — state lives in $STATE_DIR.
+tar --exclude=node_modules --exclude=dist --exclude=.git \
+    --exclude=data --exclude='*.log' \
+    -czf - . \
+  | "${SSH[@]}" "rm -rf $SRC_DIR && mkdir -p $SRC_DIR && tar -xzf - -C $SRC_DIR"
+
+say "Building and starting the container"
+# The host's root docker config names a `pass` credential store whose GPG key is
+# gone, which makes docker-compose abort before it builds anything. Everything
+# here pulls from public Docker Hub, so point just these commands at an empty
+# config directory instead of altering the machine's real one.
+"${SSH[@]}" "mkdir -p $SRC_DIR/.dockercfg && echo '{}' > $SRC_DIR/.dockercfg/config.json \
+  && cd $SRC_DIR && DOCKER_CONFIG=$SRC_DIR/.dockercfg docker-compose up -d --build"
+
+say "Waiting for it to come up"
+"${SSH[@]}" bash -s <<'EOF'
+for i in $(seq 1 30); do
+  if curl -fsS http://172.17.0.1:4310/api/health >/dev/null 2>&1; then
+    echo "healthy"
+    curl -s http://172.17.0.1:4310/api/health
+    echo
+    exit 0
+  fi
+  sleep 2
+done
+echo "the tracker did not answer within 60s" >&2
+docker logs --tail 60 todont-tracker >&2
+exit 1
+EOF
+
+printf '\n\033[1;32mDeployed.\033[0m Routed at https://bugs.ezmuze.studio once the proxy host exists.\n'

@@ -191,36 +191,51 @@ curl -H "Authorization: Bearer ezb_..." localhost:4310/api/me
 
 ## Deploying
 
-DNS: `bugs.ezmuze.studio` is a CNAME to `ezmuze.studio`, which is an A record to the
-host. Once, on the server:
+The host (your-host) runs every service in Docker, with **Nginx Proxy
+Manager** owning ports 80 and 443. Services publish on the docker bridge address
+`172.17.0.1:<port>`, which the proxy container can reach but the internet cannot,
+and NPM terminates TLS in front. The tracker follows that convention rather than
+installing a system nginx or upgrading the host's Node (still 16).
+
+DNS: `bugs.ezmuze.studio` is a CNAME to `ezmuze.studio`, an A record to the host.
 
 ```bash
-scp -r deploy/ root@bugs.ezmuze.studio:/tmp/todont-deploy
-ssh root@bugs.ezmuze.studio bash /tmp/todont-deploy/setup-server.sh
+deploy/deploy.sh                      # defaults to root@your-host
 ```
 
-That installs Node if needed, creates the `todont` service account and
-`/var/lib/todont-tracker`, writes `/etc/todont-tracker.env` with a generated
-`COOKIE_SECRET`, installs the systemd unit and the nginx site, and requests a
-certificate with certbot.
+It tars the source over ssh (no rsync on Windows), builds the image on the
+server, and starts the container, then polls `/api/health` and prints the
+container log if it does not come up. On the first run it also writes
+`$STATE_DIR/tracker.env` with a generated `COOKIE_SECRET`;
+later runs leave it alone, because replacing it signs everyone out.
 
-Then, for this and every later release, from the repo root:
+Two things about this host worth knowing before you debug a failed deploy:
 
-```bash
-deploy/deploy.sh
-```
+- Root's docker config names a `pass` credential store whose GPG key is gone, so
+  `docker-compose` aborts before building anything. The deploy points only its
+  own commands at an empty `DOCKER_CONFIG`; the machine's real config is
+  untouched. Everything here comes from public Docker Hub.
+- The container runs as the image's `node` user (uid 1000) and `/data` is a bind
+  mount, which keeps the host's ownership. The deploy chowns it to 1000; without
+  that SQLite fails with `SQLITE_CANTOPEN`.
 
-It builds, rsyncs `server/dist`, `web/dist` and the production dependency tree,
-restarts the service and checks `/api/health`, printing the journal if it fails.
+### Routing
 
-**Note:** the API registers a route per built file at startup, so the service must be
-restarted after a new `web/dist` is pushed — `deploy.sh` does this. Pushing assets
-without a restart serves the old file names and the page comes up blank.
+The proxy host entry in Nginx Proxy Manager (admin UI on port 8181):
+
+| | |
+|---|---|
+| Domain | `bugs.ezmuze.studio` |
+| Scheme | `http` |
+| Forward host | `172.17.0.1` |
+| Forward port | `4310` |
+| Websockets | on |
+| SSL | request a new Let's Encrypt certificate, force SSL |
 
 State that is not in git and must be backed up:
 
 ```
-/var/lib/todont-tracker/tracker.db   the board
-/var/lib/todont-tracker/uploads/     the screenshots
-/etc/todont-tracker.env              COOKIE_SECRET; losing it signs everyone out
+$STATE_DIR/data/tracker.db   the board
+$STATE_DIR/data/uploads/     the screenshots
+$STATE_DIR/tracker.env       COOKIE_SECRET; losing it signs everyone out
 ```
