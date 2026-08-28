@@ -1,4 +1,4 @@
-import { createWriteStream } from 'node:fs';
+import { createReadStream, createWriteStream } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
@@ -19,9 +19,16 @@ const ALLOWED: Record<string, string> = {
   'image/jpeg': '.jpg',
   'image/gif': '.gif',
   'image/webp': '.webp',
+  'video/webm': '.webm',
+  'video/mp4': '.mp4',
   'text/plain': '.txt',
   'application/pdf': '.pdf',
 };
+
+/** Shown inline in the bug rather than offered as a download. */
+function isViewable(mime: string): boolean {
+  return mime.startsWith('image/') || mime.startsWith('video/');
+}
 
 interface AttachmentRow {
   id: number;
@@ -31,6 +38,46 @@ interface AttachmentRow {
   mime: string;
   size: number;
   uploaded_by: number | null;
+}
+
+/**
+ * A single `bytes=` range, clamped to the file. Returns null when the client
+ * asked for the whole file, and 'unsatisfiable' when it asked for something
+ * outside it (which is a 416, not a 200 with the wrong bytes).
+ *
+ * Multi-range requests are deliberately answered with the whole file: they are
+ * legal but no browser media player issues them.
+ */
+function parseRange(
+  header: string | undefined,
+  total: number,
+): { start: number; end: number } | 'unsatisfiable' | null {
+  if (!header) return null;
+
+  const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+  if (!match) return null;
+
+  const [, rawStart, rawEnd] = match;
+  if (rawStart === '' && rawEnd === '') return null;
+
+  let start: number;
+  let end: number;
+
+  if (rawStart === '') {
+    // A suffix range — "bytes=-500" means the last 500 bytes.
+    const wanted = Number(rawEnd);
+    if (wanted <= 0) return 'unsatisfiable';
+    start = Math.max(0, total - wanted);
+    end = total - 1;
+  } else {
+    start = Number(rawStart);
+    end = rawEnd === '' ? total - 1 : Number(rawEnd);
+  }
+
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+  if (start >= total || start > end) return 'unsatisfiable';
+
+  return { start, end: Math.min(end, total - 1) };
 }
 
 /** Same rule as editing: the reporter while untriaged, or any manager. */
@@ -64,7 +111,11 @@ export async function attachmentRoutes(app: FastifyInstance): Promise<void> {
       const mime = (part.mimetype || '').toLowerCase();
       const ext = ALLOWED[mime];
       if (!ext) {
-        throw new HttpError(415, `${part.filename || 'That file'} is not an accepted type (PNG, JPEG, GIF, WebP, PDF or plain text)`);
+        throw new HttpError(
+          415,
+          `${part.filename || 'That file'} is not an accepted type ` +
+            '(PNG, JPEG, GIF, WebP, WebM, MP4, PDF or plain text)',
+        );
       }
 
       const filename = `${randomUUID()}${ext}`;
@@ -100,7 +151,14 @@ export async function attachmentRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(201).send({ bug: serializeDetail(requireBug(bug.id)) });
   });
 
-  /** Public, like the rest of the board. */
+  /**
+   * Public, like the rest of the board.
+   *
+   * Served as a stream with byte-range support, which video needs: a browser
+   * cannot seek without it, and Safari refuses to play a video at all if the
+   * response is not ranged. Streaming also keeps a 50MB screen recording off
+   * the heap.
+   */
   app.get<{ Params: { id: string } }>('/api/attachments/:id', async (req, reply) => {
     const row = db.prepare(`SELECT * FROM attachments WHERE id = ?`).get(Number(req.params.id)) as
       | AttachmentRow
@@ -108,24 +166,38 @@ export async function attachmentRoutes(app: FastifyInstance): Promise<void> {
     if (!row) throw new HttpError(404, 'No such attachment');
 
     const file = path.join(config.uploadDir, row.filename);
-    let handle: Buffer;
+    let total: number;
     try {
-      handle = await fs.readFile(file);
+      total = (await fs.stat(file)).size;
     } catch {
       throw new HttpError(404, 'That attachment is no longer on disk');
     }
 
-    const inline = row.mime.startsWith('image/');
-    return reply
+    reply
       .header('content-type', row.mime)
-      .header('content-length', String(row.size))
+      .header('accept-ranges', 'bytes')
       .header('cache-control', 'public, max-age=31536000, immutable')
       .header('x-content-type-options', 'nosniff')
       .header(
         'content-disposition',
-        `${inline ? 'inline' : 'attachment'}; filename="${row.original_name.replace(/["\\\r\n]/g, '_')}"`,
-      )
-      .send(handle);
+        `${isViewable(row.mime) ? 'inline' : 'attachment'}; filename="${row.original_name.replace(/["\\\r\n]/g, '_')}"`,
+      );
+
+    const range = parseRange(req.headers.range, total);
+
+    if (range === 'unsatisfiable') {
+      return reply.code(416).header('content-range', `bytes */${total}`).send();
+    }
+
+    if (range) {
+      return reply
+        .code(206)
+        .header('content-range', `bytes ${range.start}-${range.end}/${total}`)
+        .header('content-length', String(range.end - range.start + 1))
+        .send(createReadStream(file, { start: range.start, end: range.end }));
+    }
+
+    return reply.header('content-length', String(total)).send(createReadStream(file));
   });
 
   app.delete<{ Params: { id: string } }>('/api/attachments/:id', async (req) => {

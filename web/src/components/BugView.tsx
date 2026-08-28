@@ -182,15 +182,33 @@ export function BugView({ bugId, session, columns, onChanged, onClose, onOpenOth
                 <div className="detail-section">
                   <h3>Attachments</h3>
                   <div className="shots">
-                    {bug.attachments.map((a) => (
-                      <a key={a.id} href={a.url} target="_blank" rel="noreferrer" title={a.name}>
-                        {a.mime.startsWith('image/') ? (
-                          <img src={a.url} alt={a.name} />
-                        ) : (
-                          <span className="file-link">{a.name}</span>
-                        )}
-                      </a>
-                    ))}
+                    {bug.attachments.map((a) =>
+                      // A video plays in place; wrapping it in a link would put
+                      // its own controls in a fight with the anchor.
+                      a.mime.startsWith('video/') ? (
+                        <div className="shot video" key={a.id} title={a.name}>
+                          <video src={a.url} controls preload="metadata" playsInline />
+                          <a href={a.url} target="_blank" rel="noreferrer" className="file-link">
+                            {a.name}
+                          </a>
+                        </div>
+                      ) : (
+                        <a
+                          className="shot"
+                          key={a.id}
+                          href={a.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          title={a.name}
+                        >
+                          {a.mime.startsWith('image/') ? (
+                            <img src={a.url} alt={a.name} />
+                          ) : (
+                            <span className="file-link">{a.name}</span>
+                          )}
+                        </a>
+                      ),
+                    )}
                   </div>
                 </div>
               ) : null}

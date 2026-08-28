@@ -138,9 +138,16 @@ Everything lands in `unconfirmed` unless the token also has `manage` and passes
 | `GET/POST /api/tokens`, `DELETE /api/tokens/:id` | — `admin` |
 | `GET /api/health` | liveness |
 
-Attachments accept PNG, JPEG, GIF, WebP, PDF and plain text, 10MB each and 10 per bug.
-SVG is refused on purpose: it can carry script, and attachments are served from the
-same origin as the app.
+Attachments accept PNG, JPEG, GIF, WebP, **WebM, MP4**, PDF and plain text — 50MB each
+and 10 per bug. Screen recordings play inline on the bug; they are served as a stream
+with byte-range support, which a browser needs in order to seek (and which Safari needs
+in order to play video at all).
+
+SVG is refused on purpose: it can carry script, and attachments are served from the same
+origin as the app. `.mov` is not accepted yet — say if you want it, it is one line.
+
+The proxy host's `client_max_body_size` must stay above `MAX_UPLOAD_BYTES`, or a large
+upload dies at nginx with a 413 the app never sees.
 
 ---
 

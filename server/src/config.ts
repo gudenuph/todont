@@ -44,7 +44,8 @@ export const config = {
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean),
 
-  maxUploadBytes: Number(env('MAX_UPLOAD_BYTES', String(10 * 1024 * 1024))),
+  /** 50MB: screenshots are tiny, but a short screen recording is not. */
+  maxUploadBytes: Number(env('MAX_UPLOAD_BYTES', String(50 * 1024 * 1024))),
   maxUploadsPerBug: Number(env('MAX_UPLOADS_PER_BUG', '10')),
 
   /** Serve the built web/ SPA from the API process (true in production). */

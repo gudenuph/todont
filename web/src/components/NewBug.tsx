@@ -2,11 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import type { BugDetail } from '../types';
 
-const ACCEPT = 'image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain';
+const ACCEPT =
+  'image/png,image/jpeg,image/gif,image/webp,video/webm,video/mp4,application/pdf,text/plain';
 
 interface Staged {
   file: File;
+  /** Object URL for anything we can show; null for PDFs and text. */
   preview: string | null;
+  kind: 'image' | 'video' | 'file';
 }
 
 export function NewBug({
@@ -41,10 +44,18 @@ export function NewBug({
   );
 
   function add(list: FileList | File[]) {
-    const staged = [...list].map((file) => ({
-      file,
-      preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : null,
-    }));
+    const staged: Staged[] = [...list].map((file) => {
+      const kind = file.type.startsWith('image/')
+        ? 'image'
+        : file.type.startsWith('video/')
+          ? 'video'
+          : 'file';
+      return {
+        file,
+        kind,
+        preview: kind === 'file' ? null : URL.createObjectURL(file),
+      };
+    });
     setFiles((prev) => [...prev, ...staged].slice(0, 10));
   }
 
@@ -196,7 +207,7 @@ export function NewBug({
           </div>
 
           <div className="field">
-            <label>Screenshots</label>
+            <label>Screenshots and recordings</label>
             <div
               className={`dropzone${dragOver ? ' over' : ''}`}
               onClick={() => input.current?.click()}
@@ -211,7 +222,8 @@ export function NewBug({
                 add(e.dataTransfer.files);
               }}
             >
-              Drop images here, paste from the clipboard, or click to choose
+              Drop images or a screen recording here, paste from the clipboard, or click to
+              choose
             </div>
             <input
               ref={input}
@@ -224,14 +236,23 @@ export function NewBug({
                 e.target.value = '';
               }}
             />
-            <div className="hint">PNG, JPEG, GIF, WebP, PDF or .txt — up to 10 files, 10MB each.</div>
+            <div className="hint">
+              Images (PNG, JPEG, GIF, WebP), screen recordings (WebM, MP4), PDF or .txt —
+              up to 10 files, 50MB each.
+            </div>
 
             {files.length ? (
               <div className="thumbs">
                 {files.map((f, i) => (
                   <div className="thumb" key={`${f.file.name}-${i}`}>
-                    {f.preview ? (
+                    {f.kind === 'image' && f.preview ? (
                       <img src={f.preview} alt={f.file.name} />
+                    ) : f.kind === 'video' && f.preview ? (
+                      <>
+                        {/* muted + no controls: this is a thumbnail, not a player */}
+                        <video src={f.preview} muted playsInline preload="metadata" />
+                        <span className="badge">video</span>
+                      </>
                     ) : (
                       <div className="file">{f.file.name}</div>
                     )}
