@@ -10,13 +10,18 @@ export class ApiError extends Error {
 }
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
+  // Only declare a JSON body when there is one. A content-type with an empty
+  // body is a 400 — which is every bodyless POST here: sign in, sign out,
+  // unmerge. FormData sets its own type, boundary included.
+  const isJsonBody = init?.body !== undefined && !(init.body instanceof FormData);
+
   const res = await fetch(path, {
     credentials: 'same-origin',
     ...init,
-    headers:
-      init?.body instanceof FormData
-        ? init.headers
-        : { 'content-type': 'application/json', ...(init?.headers ?? {}) },
+    headers: {
+      ...(isJsonBody ? { 'content-type': 'application/json' } : {}),
+      ...(init?.headers ?? {}),
+    },
   });
 
   const text = await res.text();

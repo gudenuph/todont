@@ -40,6 +40,23 @@ await app.register(rateLimit, {
   },
 });
 
+/**
+ * Treat an empty JSON body as `{}`. Several endpoints take no body at all
+ * (sign out, unmerge), and a client that sets a JSON content-type anyway —
+ * which most HTTP libraries do by default on POST — would otherwise get a 400
+ * with nothing wrong on its side.
+ */
+app.addContentTypeParser('application/json', { parseAs: 'string' }, (_req, body, done) => {
+  const text = typeof body === 'string' ? body.trim() : '';
+  if (text === '') return done(null, {});
+  try {
+    done(null, JSON.parse(text));
+  } catch {
+    const err = new HttpError(400, 'That request body is not valid JSON');
+    done(err, undefined);
+  }
+});
+
 /** Every request knows who is asking; nothing here rejects anonymous readers. */
 app.addHook('onRequest', async (req) => {
   resolveActor(req);
