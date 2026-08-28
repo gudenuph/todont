@@ -89,6 +89,14 @@ export const api = {
   assignBug: (id: number, userId: number | null) =>
     call<{ bug: BugDetail }>(`/api/bugs/${id}/assign`, { method: 'POST', body: json({ userId }) }),
 
+  deleteBug: (id: number) =>
+    call<{ ok: true; deleted: number; released: number[] }>(`/api/bugs/${id}`, {
+      method: 'DELETE',
+    }),
+
+  deleteComment: (id: number) =>
+    call<{ bug: BugDetail }>(`/api/comments/${id}`, { method: 'DELETE' }),
+
   comment: (id: number, body: string) =>
     call<{ bug: BugDetail }>(`/api/bugs/${id}/comments`, { method: 'POST', body: json({ body }) }),
 

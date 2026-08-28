@@ -274,6 +274,55 @@ server.registerTool(
 );
 
 server.registerTool(
+  'delete_bug',
+  {
+    title: 'Delete a bug',
+    description:
+      'Permanently remove a bug with its comments and attachments — moderation for spam and mistakes. There is no undo. Any duplicates merged into it are released back onto their columns. Prefer moving a bug to "rejected" unless it genuinely should not exist.',
+    inputSchema: { id: z.number() },
+  },
+  async ({ id }) => {
+    try {
+      return reply(await call(`/api/bugs/${id}`, { method: 'DELETE' }));
+    } catch (err) {
+      return fail(err);
+    }
+  },
+);
+
+server.registerTool(
+  'delete_comment',
+  {
+    title: 'Delete a comment',
+    description: 'Remove one comment from a bug’s thread. Manager-only, and permanent.',
+    inputSchema: { id: z.number().describe('The comment id, from get_bug') },
+  },
+  async ({ id }) => {
+    try {
+      return reply(await call(`/api/comments/${id}`, { method: 'DELETE' }));
+    } catch (err) {
+      return fail(err);
+    }
+  },
+);
+
+server.registerTool(
+  'delete_attachment',
+  {
+    title: 'Delete an attachment',
+    description: 'Remove one attachment and its file from disk. Permanent.',
+    inputSchema: { id: z.number().describe('The attachment id, from get_bug') },
+  },
+  async ({ id }) => {
+    try {
+      return reply(await call(`/api/attachments/${id}`, { method: 'DELETE' }));
+    } catch (err) {
+      return fail(err);
+    }
+  },
+);
+
+server.registerTool(
   'list_assignable',
   {
     title: 'List who a bug can be assigned to',

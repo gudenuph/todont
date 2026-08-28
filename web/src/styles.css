@@ -288,7 +288,7 @@ a {
 .card {
   background: var(--header);
   border: 1px solid var(--border-soft);
-  border-left: 3px solid var(--sev-color, var(--border));
+  border-left: 4px solid var(--sev-color, var(--border));
   border-radius: var(--radius);
   padding: 9px 10px;
   cursor: pointer;
@@ -382,6 +382,16 @@ a {
 
 .drag-hint b {
   color: var(--amber);
+}
+
+/* Severity swatch, matching the strip down the left of the card. */
+.sev-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  margin-right: 6px;
+  vertical-align: 1px;
 }
 
 /* ------------------------------------------------------------------ modals */
@@ -647,6 +657,7 @@ select:focus {
 }
 
 .shots .shot {
+  position: relative;
   display: block;
   border: 1px solid var(--border-soft);
   border-radius: var(--radius);
@@ -746,6 +757,74 @@ select:focus {
 .dup-item .grow {
   flex: 1;
   overflow-wrap: anywhere;
+}
+
+/* Remove controls sit on the thing they remove, not in a separate list. */
+.shot-remove,
+.comment-remove {
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 2px 6px;
+}
+
+.shot-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.shot:hover .shot-remove,
+.shot-remove:focus-visible {
+  opacity: 1;
+}
+
+.shot-remove:hover,
+.comment-remove:hover {
+  background: var(--negative);
+  border-color: var(--negative-hover);
+  color: #fff;
+}
+
+.comment-remove {
+  margin-left: auto;
+  background: transparent;
+  border-color: transparent;
+  opacity: 0;
+}
+
+.comment:hover .comment-remove,
+.comment-remove:focus-visible {
+  opacity: 1;
+}
+
+.danger-zone {
+  margin-top: 22px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.btn.danger-outline {
+  background: transparent;
+  border-color: var(--negative);
+  color: #e79a9a;
+}
+
+.btn.danger-outline:hover:not(:disabled) {
+  background: var(--negative);
+  color: #fff;
+}
+
+.confirm-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 /* --------------------------------------------------------------- users tab */

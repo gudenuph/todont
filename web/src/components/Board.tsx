@@ -14,13 +14,7 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core';
 import type { BoardColumn, BugCard as Bug } from '../types';
-
-const SEVERITY_COLOR: Record<string, string> = {
-  critical: '#ff5a5a',
-  major: '#e68c32',
-  minor: '#6e8ca8',
-  trivial: '#3c3c4a',
-};
+import { severityColor } from '../severity';
 
 /** How much of a card's height (top and bottom) counts as "between cards". */
 const EDGE_BAND = 0.3;
@@ -230,7 +224,7 @@ export function Board({ bugs, columns, canManage, onOpen, onMove, onMerge }: Pro
         {active ? (
           <div
             className="card"
-            style={{ '--sev-color': SEVERITY_COLOR[active.severity] ?? '#3c3c4a' } as React.CSSProperties}
+            style={{ '--sev-color': severityColor(active.severity) } as React.CSSProperties}
           >
             <CardFace bug={active} />
           </div>
@@ -359,7 +353,7 @@ function DraggableCard({
       ref={setRef}
       data-card={bug.id}
       className={`card${draggable.isDragging ? ' dragging' : ''}${isMergeTarget ? ' merge-target' : ''}`}
-      style={{ '--sev-color': SEVERITY_COLOR[bug.severity] ?? '#3c3c4a' } as React.CSSProperties}
+      style={{ '--sev-color': severityColor(bug.severity) } as React.CSSProperties}
       onClick={() => onOpen(bug.id)}
       {...(canManage ? draggable.listeners : {})}
       {...(canManage ? draggable.attributes : {})}

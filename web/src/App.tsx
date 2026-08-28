@@ -223,7 +223,15 @@ export function App() {
           bugId={openBug}
           session={session}
           columns={columns}
+          severities={meta?.severities ?? []}
           onChanged={applyBug}
+          onDeleted={(id) => {
+            setBugs((prev) => prev.filter((b) => b.id !== id));
+            openBugById(null);
+            // A deleted bug releases any duplicates merged into it, so the
+            // board can gain cards as well as lose one.
+            void refreshQuiet();
+          }}
           onClose={() => openBugById(null)}
           onOpenOther={(id) => openBugById(id)}
         />

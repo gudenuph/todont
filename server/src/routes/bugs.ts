@@ -3,6 +3,7 @@ import { db, logEvent, type BugRow } from '../db.js';
 import { INTAKE_COLUMN, isSeverity } from '../columns.js';
 import { HttpError, requireScope, type Actor } from '../auth/identity.js';
 import {
+  deleteBug,
   listBugs,
   mergeBug,
   moveBug,
@@ -242,6 +243,58 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
       return { bug: serializeDetail(requireBug(bug.id)) };
     },
   );
+
+  /**
+   * Delete a bug outright — moderation, for spam and mistakes. There is no
+   * undo, so it is manager-only and the UI asks twice.
+   */
+  app.delete<{ Params: { id: string } }>('/api/bugs/:id', async (req) => {
+    const actor = requireScope(req, 'manage');
+    const bug = requireBug(bugId(req.params.id));
+
+    const result = await deleteBug(bug.id, actor.user.id);
+
+    // Nothing survives the row to record this on, so the log is the audit trail.
+    req.log.info(
+      {
+        bug: bug.id,
+        title: bug.title,
+        by: actor.user.name,
+        releasedDuplicates: result.released,
+        filesRemoved: result.filesRemoved,
+      },
+      'bug deleted',
+    );
+
+    return { ok: true, deleted: bug.id, ...result };
+  });
+
+  /**
+   * Delete one comment. Manager-only: letting authors remove their own would
+   * let someone erase what a reply is answering.
+   */
+  app.delete<{ Params: { id: string } }>('/api/comments/:id', async (req) => {
+    const actor = requireScope(req, 'manage');
+
+    const row = db.prepare(`SELECT * FROM comments WHERE id = ?`).get(Number(req.params.id)) as
+      | { id: number; bug_id: number; author_id: number | null; body: string }
+      | undefined;
+    if (!row) throw new HttpError(404, 'No such comment');
+
+    const author = db.prepare(`SELECT name FROM users WHERE id = ?`).get(row.author_id ?? -1) as
+      | { name: string }
+      | undefined;
+
+    db.prepare(`DELETE FROM comments WHERE id = ?`).run(row.id);
+    logEvent(
+      row.bug_id,
+      actor.user.id,
+      'comment_deleted',
+      JSON.stringify({ author: author?.name ?? 'someone' }),
+    );
+
+    return { bug: serializeDetail(requireBug(row.bug_id)) };
+  });
 
   app.post<{ Params: { id: string }; Body: { body?: string } }>(
     '/api/bugs/:id/comments',

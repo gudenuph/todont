@@ -1,3 +1,6 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { config } from '../config.js';
 import { db, logEvent, type BugRow, type UserRow } from '../db.js';
 import { HttpError, publicUser } from '../auth/identity.js';
 import { isColumn } from '../columns.js';
@@ -264,6 +267,49 @@ export function mergeBug(bugId: number, intoId: number, actorId: number | null):
   logEvent(canonical.id, actorId, 'duplicate_added', JSON.stringify({ duplicate: dup.id }));
 
   return requireBug(dup.id);
+}
+
+/**
+ * Remove a bug outright — the moderation escape hatch for spam and mistakes.
+ *
+ * Comments, attachment rows and the activity log go with it through the
+ * schema's cascades, but two things need doing by hand: duplicates merged into
+ * it are released back onto their columns first (otherwise the foreign key
+ * quietly nulls their `merged_into_id` and they reappear at a stale position),
+ * and the uploaded files are unlinked from disk after the row is gone.
+ */
+export async function deleteBug(
+  bugId: number,
+  actorId: number | null,
+): Promise<{ released: number[]; filesRemoved: number }> {
+  const bug = requireBug(bugId);
+
+  const duplicates = db
+    .prepare(`SELECT id FROM bugs WHERE merged_into_id = ?`)
+    .all(bug.id) as Array<{ id: number }>;
+
+  const files = db
+    .prepare(`SELECT filename FROM attachments WHERE bug_id = ?`)
+    .all(bug.id) as Array<{ filename: string }>;
+
+  const run = db.transaction(() => {
+    for (const dup of duplicates) unmergeBug(dup.id, actorId);
+    db.prepare(`DELETE FROM bugs WHERE id = ?`).run(bug.id);
+  });
+
+  run();
+
+  let filesRemoved = 0;
+  for (const file of files) {
+    try {
+      await fs.rm(path.join(config.uploadDir, file.filename), { force: true });
+      filesRemoved++;
+    } catch {
+      // The row is already gone; a leftover file is not worth failing the call.
+    }
+  }
+
+  return { released: duplicates.map((d) => d.id), filesRemoved };
 }
 
 export function unmergeBug(bugId: number, actorId: number | null): BugRow {

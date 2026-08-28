@@ -48,6 +48,14 @@ always somewhere to drop between two cards in a full column.
 | `manager` | ✅ | ✅ | ✅ | |
 | `admin` | ✅ | ✅ | ✅ | ✅ |
 
+Anyone signed in can comment, on any bug. Managers additionally delete bugs, comments
+and attachments, and set severity — all moderation, so none of it is available to a
+plain user. Deleting is permanent and the UI asks twice; deleting a bug releases any
+duplicates merged into it back onto their columns, and unlinks its uploaded files.
+
+Severity (`critical`, `major`, `minor`, `trivial`) colours the strip down the left of
+every card, so a board can be read at a glance without opening anything.
+
 Admins promote and demote from the **Users** dialog in the top bar. An admin cannot
 change their own role, and the last admin cannot be demoted — otherwise the instance
 would have nobody able to manage anyone.
@@ -130,6 +138,8 @@ Everything lands in `unconfirmed` unless the token also has `manage` and passes
 | `POST /api/bugs/:id/unmerge` | — `manage` |
 | `POST /api/bugs/:id/assign` | `{userId\|null}` — `manage` |
 | `POST /api/bugs/:id/comments` | `{body}` — `write` |
+| `DELETE /api/bugs/:id` | delete a bug outright — `manage` |
+| `DELETE /api/comments/:id` | delete one comment — `manage` |
 | `POST /api/bugs/:id/attachments` | multipart — `write` |
 | `GET /api/attachments/:id` | the file (public) |
 | `DELETE /api/attachments/:id` | uploader or `manage` |

@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import type { BoardColumn, BugDetail, Session, User } from '../types';
+import { severityColor } from '../severity';
 
 function when(iso: string): string {
   // SQLite hands back "YYYY-MM-DD HH:MM:SS" in UTC with no zone marker.
@@ -39,6 +40,8 @@ function describeEvent(type: string, detail: string): string {
       return `added ${String(data.count ?? 1)} attachment(s)`;
     case 'attachment_removed':
       return `removed an attachment`;
+    case 'comment_deleted':
+      return `deleted a comment by ${String(data.author ?? 'someone')}`;
     default:
       return type;
   }
@@ -48,12 +51,23 @@ interface Props {
   bugId: number;
   session: Session;
   columns: BoardColumn[];
+  severities: string[];
   onChanged: (bug: BugDetail) => void;
+  onDeleted: (id: number) => void;
   onClose: () => void;
   onOpenOther: (id: number) => void;
 }
 
-export function BugView({ bugId, session, columns, onChanged, onClose, onOpenOther }: Props) {
+export function BugView({
+  bugId,
+  session,
+  columns,
+  severities,
+  onChanged,
+  onDeleted,
+  onClose,
+  onOpenOther,
+}: Props) {
   const [bug, setBug] = useState<BugDetail | null>(null);
   const [assignable, setAssignable] = useState<User[]>([]);
   const [comment, setComment] = useState('');
@@ -62,6 +76,10 @@ export function BugView({ bugId, session, columns, onChanged, onClose, onOpenOth
 
   const canManage = session.scopes?.includes('manage') ?? false;
   const canWrite = session.scopes?.includes('write') ?? false;
+
+  /** Managers can pull anything; everyone else only what they uploaded. */
+  const canRemoveAttachment = (uploaderId: number | undefined) =>
+    canManage || (uploaderId !== undefined && uploaderId === session.user?.id);
 
   useEffect(() => {
     let live = true;
@@ -98,6 +116,20 @@ export function BugView({ bugId, session, columns, onChanged, onClose, onOpenOth
     } catch (err) {
       setError(err instanceof Error ? err.message : 'That did not work');
     } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Deleting a bug leaves nothing to re-render, so it closes the dialog. */
+  async function removeBug() {
+    if (!bug) return;
+    setBusy(true);
+    setError('');
+    try {
+      await api.deleteBug(bug.id);
+      onDeleted(bug.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not delete that bug');
       setBusy(false);
     }
   }
@@ -191,22 +223,37 @@ export function BugView({ bugId, session, columns, onChanged, onClose, onOpenOth
                           <a href={a.url} target="_blank" rel="noreferrer" className="file-link">
                             {a.name}
                           </a>
+                          {canRemoveAttachment(a.uploadedBy?.id) ? (
+                            <button
+                              className="shot-remove"
+                              title="Remove this attachment"
+                              disabled={busy}
+                              onClick={() => void mutate(() => api.deleteAttachment(a.id))}
+                            >
+                              ×
+                            </button>
+                          ) : null}
                         </div>
                       ) : (
-                        <a
-                          className="shot"
-                          key={a.id}
-                          href={a.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          title={a.name}
-                        >
-                          {a.mime.startsWith('image/') ? (
-                            <img src={a.url} alt={a.name} />
-                          ) : (
-                            <span className="file-link">{a.name}</span>
-                          )}
-                        </a>
+                        <div className="shot" key={a.id} title={a.name}>
+                          <a href={a.url} target="_blank" rel="noreferrer">
+                            {a.mime.startsWith('image/') ? (
+                              <img src={a.url} alt={a.name} />
+                            ) : (
+                              <span className="file-link">{a.name}</span>
+                            )}
+                          </a>
+                          {canRemoveAttachment(a.uploadedBy?.id) ? (
+                            <button
+                              className="shot-remove"
+                              title="Remove this attachment"
+                              disabled={busy}
+                              onClick={() => void mutate(() => api.deleteAttachment(a.id))}
+                            >
+                              ×
+                            </button>
+                          ) : null}
+                        </div>
                       ),
                     )}
                   </div>
@@ -249,6 +296,16 @@ export function BugView({ bugId, session, columns, onChanged, onClose, onOpenOth
                           <b>{c.author?.name ?? 'someone'}</b>
                           {c.author?.isBot ? <span className="pill bot">bot</span> : null}
                           <span>{when(c.createdAt)}</span>
+                          {canManage ? (
+                            <button
+                              className="comment-remove"
+                              title="Delete this comment"
+                              disabled={busy}
+                              onClick={() => void mutate(() => api.deleteComment(c.id))}
+                            >
+                              ×
+                            </button>
+                          ) : null}
                         </div>
                         <p>{c.body}</p>
                       </div>
@@ -303,7 +360,10 @@ export function BugView({ bugId, session, columns, onChanged, onClose, onOpenOth
               </div>
               <div className="sidebar-row">
                 <span>Severity</span>
-                <span>{bug.severity}</span>
+                <span>
+                  <i className="sev-dot" style={{ background: severityColor(bug.severity) }} />
+                  {bug.severity}
+                </span>
               </div>
               <div className="sidebar-row">
                 <span>Reported by</span>
@@ -355,6 +415,25 @@ export function BugView({ bugId, session, columns, onChanged, onClose, onOpenOth
                   </div>
 
                   <div className="field">
+                    <label htmlFor="bv-severity">Severity</label>
+                    <select
+                      id="bv-severity"
+                      value={bug.severity}
+                      disabled={busy}
+                      onChange={(e) =>
+                        void mutate(() => api.updateBug(bug.id, { severity: e.target.value }))
+                      }
+                    >
+                      {severities.map((sv) => (
+                        <option key={sv} value={sv}>
+                          {sv}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="hint">Sets the colour of the strip down the card.</div>
+                  </div>
+
+                  <div className="field">
                     <label htmlFor="bv-assignee">Assignee</label>
                     <select
                       id="bv-assignee"
@@ -375,6 +454,20 @@ export function BugView({ bugId, session, columns, onChanged, onClose, onOpenOth
                       ))}
                     </select>
                   </div>
+                  <div className="danger-zone">
+                    <ConfirmButton
+                      label="Delete this bug"
+                      confirmLabel={`Delete #${bug.id} permanently`}
+                      disabled={busy}
+                      onConfirm={() => void removeBug()}
+                    />
+                    <div className="hint">
+                      Removes the bug, its comments and its attachments for good.
+                      {bug.duplicateCount > 0
+                        ? ` Its ${bug.duplicateCount} merged duplicate(s) go back on the board.`
+                        : ''}
+                    </div>
+                  </div>
                 </div>
               ) : null}
             </aside>
@@ -382,6 +475,53 @@ export function BugView({ bugId, session, columns, onChanged, onClose, onOpenOth
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Two-step delete. An inline confirm rather than window.confirm: the native
+ * dialog is jarring against this UI, and it lets the button say exactly what
+ * is about to go.
+ */
+function ConfirmButton({
+  label,
+  confirmLabel,
+  disabled,
+  onConfirm,
+}: {
+  label: string;
+  confirmLabel: string;
+  disabled?: boolean;
+  onConfirm: () => void;
+}) {
+  const [armed, setArmed] = useState(false);
+  const timer = useRef<number | undefined>(undefined);
+
+  // Disarm on its own, so a half-pressed delete cannot sit there waiting to be
+  // hit by the next stray click.
+  useEffect(() => {
+    if (!armed) return;
+    timer.current = window.setTimeout(() => setArmed(false), 5000);
+    return () => window.clearTimeout(timer.current);
+  }, [armed]);
+
+  if (!armed) {
+    return (
+      <button className="btn small danger-outline" disabled={disabled} onClick={() => setArmed(true)}>
+        {label}
+      </button>
+    );
+  }
+
+  return (
+    <span className="confirm-row">
+      <button className="btn small danger" disabled={disabled} onClick={onConfirm}>
+        {confirmLabel}
+      </button>
+      <button className="btn small ghost" disabled={disabled} onClick={() => setArmed(false)}>
+        Cancel
+      </button>
+    </span>
   );
 }
 
