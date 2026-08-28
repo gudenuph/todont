@@ -1,0 +1,26 @@
+{
+  "name": "todont-tracker",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Public bug tracker for ezmuze, hosted at bugs.ezmuze.studio",
+  "workspaces": [
+    "server",
+    "web",
+    "mcp"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "npm run dev --workspace server & npm run dev --workspace web",
+    "dev:server": "npm run dev --workspace server",
+    "dev:web": "npm run dev --workspace web",
+    "build": "npm run build --workspace server && npm run build --workspace web && npm run build --workspace mcp",
+    "start": "node server/dist/index.js",
+    "cli": "node server/dist/cli.js"
+  },
+  "allowScripts": {
+    "better-sqlite3@12.11.1": true,
+    "esbuild@0.25.12": true
+  }
+}

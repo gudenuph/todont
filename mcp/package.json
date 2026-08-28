@@ -1,0 +1,19 @@
+{
+  "name": "@todont/mcp",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "bin": { "todont-mcp": "dist/index.js" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.13.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.5",
+    "typescript": "^5.7.3"
+  }
+}

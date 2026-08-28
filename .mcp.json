@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "bugs": {
+      "command": "node",
+      "args": ["./mcp/dist/index.js"],
+      "env": {
+        "TRACKER_URL": "https://bugs.ezmuze.studio",
+        "TRACKER_TOKEN": "${TODONT_TOKEN}"
+      }
+    }
+  }
+}
