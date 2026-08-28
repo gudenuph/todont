@@ -11,7 +11,7 @@ token-authenticated REST API.
 web/     React + Vite single-page board (TypeScript)
 server/  Fastify API + SQLite, and it serves the built SPA in production
 mcp/     MCP server wrapping the REST API, so Claude can work the board
-deploy/  nginx site, systemd unit, and the two scripts that stand it up
+deploy/  the deploy script and the environment template
 ```
 
 ---
@@ -155,9 +155,9 @@ updated.
 It needs a token in `TODONT_TOKEN`:
 
 ```bash
-# on the server
-sudo -u todont node /opt/todont-tracker/server/dist/cli.js \
-  token "claude" --scopes read,write,manage --bot-name "Claude" --role manager
+ssh root@your-host 'docker exec todont-tracker \
+  node server/dist/cli.js token "claude" \
+    --scopes read,write,manage --bot-name "Claude" --role manager'
 ```
 
 The token is printed once and stored hashed. Put it in your environment as
