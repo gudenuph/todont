@@ -135,6 +135,16 @@ function actorFromSession(req: FastifyRequest): Actor | null {
   return { user: row, via: 'session', scopes: scopesForRole(row.role) };
 }
 
+/** Did this request present something that was meant to be an API token? */
+export function presentedToken(req: FastifyRequest): boolean {
+  const header = req.headers.authorization;
+  const apiKey = req.headers['x-api-key'];
+  if (typeof header === 'string' && header.toLowerCase().startsWith('bearer ')) {
+    return header.slice(7).trim() !== '';
+  }
+  return typeof apiKey === 'string' && apiKey.trim() !== '';
+}
+
 function actorFromToken(req: FastifyRequest): Actor | null {
   const header = req.headers.authorization;
   const apiKey = req.headers['x-api-key'];
@@ -158,7 +168,15 @@ function actorFromToken(req: FastifyRequest): Actor | null {
     | (UserRow & { token_id: number; token_name: string; token_scopes: string })
     | undefined;
 
-  if (!row) return null;
+  if (!row) {
+    // Log the tail, never the token: enough to tell "wrong credential" from
+    // "no credential" when someone reports a 401, without storing a secret.
+    req.log.warn(
+      { tokenSuffix: token.slice(-6) },
+      'API token presented but not recognised',
+    );
+    return null;
+  }
 
   db.prepare(`UPDATE api_tokens SET last_used_at = datetime('now') WHERE id = ?`).run(
     row.token_id,
@@ -203,8 +221,18 @@ export class HttpError extends Error {
 }
 
 export function requireActor(req: FastifyRequest): Actor {
-  if (!req.actor) throw new HttpError(401, 'Sign in with your ezmuze account first');
-  return req.actor;
+  if (req.actor) return req.actor;
+
+  // Telling a build server to "sign in with your ezmuze account" is useless and
+  // sends whoever is debugging it looking in entirely the wrong place.
+  if (presentedToken(req)) {
+    throw new HttpError(
+      401,
+      'That API token was not recognised — it may have been revoked, or copied incompletely',
+    );
+  }
+
+  throw new HttpError(401, 'Sign in with your ezmuze account first');
 }
 
 export function requireScope(req: FastifyRequest, scope: Scope): Actor {
