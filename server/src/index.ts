@@ -16,6 +16,7 @@ import { attachmentRoutes } from './routes/attachments.js';
 import { adminRoutes } from './routes/admin.js';
 import { versionRoutes, listVersions, serializeVersion, defaultVersion } from './routes/versions.js';
 import { stackTraceRoutes } from './routes/stacktraces.js';
+import { draftRoutes } from './routes/drafts.js';
 
 const app = Fastify({
   logger: isProd
@@ -100,6 +101,7 @@ await app.register(attachmentRoutes);
 await app.register(adminRoutes);
 await app.register(versionRoutes);
 await app.register(stackTraceRoutes);
+await app.register(draftRoutes);
 
 // ------------------------------------------------------------------ the SPA
 

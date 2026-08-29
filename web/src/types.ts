@@ -123,6 +123,20 @@ export interface BugDetail extends BugCard {
   duplicates: Array<BugCard & { description: string }>;
 }
 
+/** What the app already knew when it sent someone here to report. */
+export interface Prefill {
+  kind?: string;
+  title?: string;
+  description?: string;
+  steps?: string;
+  expected?: string;
+  actual?: string;
+  severity?: string;
+  appVersion?: string;
+  environment?: string;
+  stackTrace?: string;
+}
+
 export interface Session {
   user: User | null;
   scopes?: string[];

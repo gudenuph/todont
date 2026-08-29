@@ -1100,3 +1100,27 @@ textarea.mono,
   color: var(--accent);
   font-variant-numeric: tabular-nums;
 }
+
+/* --------------------------------------------------- app-initiated reports */
+
+.notice {
+  background: rgba(150, 200, 255, 0.1);
+  border: 1px solid rgba(150, 200, 255, 0.35);
+  color: #cfe3ff;
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+
+.prefill-note,
+.signin-reason {
+  color: var(--text-faint);
+  font-size: 12px;
+  margin: 0 0 14px;
+}
+
+.signin-reason {
+  color: var(--text-dim);
+  font-size: 13px;
+}

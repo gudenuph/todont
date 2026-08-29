@@ -114,6 +114,16 @@ CREATE TABLE IF NOT EXISTS versions (
 );
 CREATE INDEX IF NOT EXISTS idx_versions_order ON versions(is_unreleased, released_at DESC);
 
+-- A prefilled report the app hands to the browser. Holds only what the app
+-- already knows; nothing here becomes a bug until a signed-in person submits
+-- it, which is why creating one needs no credential.
+CREATE TABLE IF NOT EXISTS drafts (
+  id          TEXT PRIMARY KEY,
+  payload     TEXT NOT NULL,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  expires_at  TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS api_tokens (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   name        TEXT NOT NULL,
@@ -164,6 +174,7 @@ db.prepare(
 export function pruneExpired(): void {
   db.prepare(`DELETE FROM auth_requests WHERE expires_at < datetime('now')`).run();
   db.prepare(`DELETE FROM sessions WHERE expires_at < datetime('now')`).run();
+  db.prepare(`DELETE FROM drafts WHERE expires_at < datetime('now')`).run();
 }
 
 export interface UserRow {

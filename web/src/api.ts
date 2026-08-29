@@ -1,4 +1,4 @@
-import type { AdminUser, BugCard, BugDetail, Meta, Session, User } from './types';
+import type { AdminUser, BugCard, BugDetail, Meta, Prefill, Session, User } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -42,6 +42,9 @@ const json = (data: unknown) => JSON.stringify(data);
 
 export const api = {
   meta: () => call<Meta>('/api/meta'),
+
+  draft: (id: string) =>
+    call<{ draft: Prefill; knownBug: BugCard | null }>(`/api/drafts/${encodeURIComponent(id)}`),
   me: () => call<Session>('/api/me'),
 
   beginSignIn: () =>

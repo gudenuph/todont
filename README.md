@@ -245,6 +245,41 @@ crash still behaves correctly.
 The count shows as `↻ 42` on the card and "Seen 42 times" on the ticket, and is separate
 from merged duplicates (`×3`), which count people who reported it by hand.
 
+### Raising a bug from inside ezmuze
+
+The app opens the browser at a report it has already filled in. Two ways in.
+
+**With a stack trace** — POST what you know, open the URL you get back:
+
+```http
+POST /api/drafts            (no credential)
+{ "title": "...", "stackTrace": "...", "appVersion": "2026.8.2",
+  "environment": "Windows (desktop)" }
+
+→ { "id": "Df06lRssosI3",
+    "url": "https://bugs.ezmuze.studio/?draft=Df06lRssosI3",
+    "expiresInMinutes": 60 }
+```
+
+**Without one** — just open a link:
+`https://bugs.ezmuze.studio/?raise=bug&version=2026.8.2&platform=Windows%20(desktop)`
+
+A draft exists because a stack trace will not survive a query string, and putting one
+there would spill it into every proxy log on the way. It is **unauthenticated on
+purpose**: shipping a token inside a desktop app ships it to everyone who can read the
+binary, and a draft is not a bug — it is inert text that still needs a signed-in person
+to submit it. It is rate limited, capped, and expires in an hour.
+
+Traces are normalised when the draft is stored, so the reporter sees on the form exactly
+what will be saved — no username or machine path.
+
+If the crash is already on the board, `GET /api/drafts/:id` says so, and the form tells
+the reporter before they write anything: sending it anyway counts against the existing
+ticket rather than opening a second one.
+
+**Not signed in?** The site asks them to sign in first, explains why, and drops them into
+the filled-in form afterwards — the prefill survives the handshake.
+
 ### The rest
 
 | | |
@@ -267,6 +302,8 @@ from merged duplicates (`×3`), which count people who reported it by hand.
 | `GET /api/assignable` | who a bug can be assigned to — `manage` |
 | `GET /api/users`, `POST /api/users/:id/role` | — `admin` |
 | `GET/POST /api/tokens`, `DELETE /api/tokens/:id` | — `admin` |
+| `POST /api/drafts` | prefilled report from the app (no credential, rate limited) |
+| `GET /api/drafts/:id` | read one back, with `knownBug` if the crash is known |
 | `POST /api/stack-traces/check` | is this crash known? counts it if so — `write` |
 | `GET /api/stack-traces/:fingerprint` | the ticket behind a fingerprint (public) |
 | `GET /api/versions` | the version list and the default (public) |

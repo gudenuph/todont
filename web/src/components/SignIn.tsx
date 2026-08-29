@@ -10,7 +10,16 @@ type Phase = 'starting' | 'waiting' | 'approved' | 'error';
  * poll until it comes back approved. The AuthKey itself never reaches this page
  * — the server swaps it for a session cookie.
  */
-export function SignIn({ onDone, onClose }: { onDone: (user: User) => void; onClose: () => void }) {
+export function SignIn({
+  onDone,
+  onClose,
+  reason,
+}: {
+  onDone: (user: User) => void;
+  onClose: () => void;
+  /** Why they are being asked, when they did not click "sign in" themselves. */
+  reason?: string;
+}) {
   const [phase, setPhase] = useState<Phase>('starting');
   const [error, setError] = useState('');
   const [approvalUrl, setApprovalUrl] = useState('');
@@ -78,6 +87,7 @@ export function SignIn({ onDone, onClose }: { onDone: (user: User) => void; onCl
 
         <div className="modal-body">
           {error ? <div className="error">{error}</div> : null}
+          {reason ? <p className="signin-reason">{reason}</p> : null}
 
           <div className="signin-steps">
             <div className={`step ${phase === 'starting' ? 'active' : 'done'}`}>

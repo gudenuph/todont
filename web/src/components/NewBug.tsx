@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
-import type { BugDetail, ItemKind, Version } from '../types';
+import type { BugCard, BugDetail, ItemKind, Prefill, Version } from '../types';
 import { VersionPicker } from './VersionPicker';
 
 const ACCEPT =
@@ -18,32 +18,42 @@ export function NewBug({
   environments,
   versions,
   defaultVersion,
+  prefill,
+  knownBug,
   onCreated,
+  onOpenBug,
   onClose,
 }: {
   kind: ItemKind;
   environments: string[];
   versions: Version[];
   defaultVersion: string;
+  /** What ezmuze already filled in, when the app sent the reporter here. */
+  prefill?: Prefill;
+  /** A bug whose stack trace already matches this one. */
+  knownBug?: BugCard | null;
   onCreated: (bug: BugDetail) => void;
+  onOpenBug?: (id: number) => void;
   onClose: () => void;
 }) {
   /** The server decides which fields this kind has no use for. */
   const shows = (field: string) => !kind.hiddenFields.includes(field);
   const labelFor = (field: string, fallback: string) => kind.labels[field] ?? fallback;
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [steps, setSteps] = useState('');
-  const [expected, setExpected] = useState('');
-  const [actual, setActual] = useState('');
+  const [title, setTitle] = useState(prefill?.title ?? '');
+  const [description, setDescription] = useState(prefill?.description ?? '');
+  const [steps, setSteps] = useState(prefill?.steps ?? '');
+  const [expected, setExpected] = useState(prefill?.expected ?? '');
+  const [actual, setActual] = useState(prefill?.actual ?? '');
   const [severity, setSeverity] = useState(
-    // The middle of this kind's scale, not a key from another one.
-    kind.levels[Math.min(2, kind.levels.length - 1)]?.key ?? '',
+    prefill?.severity ??
+      // The middle of this kind's scale, not a key from another one.
+      (kind.levels[Math.min(2, kind.levels.length - 1)]?.key ?? ''),
   );
   // Most reports come from whoever is on the current build.
-  const [appVersion, setAppVersion] = useState(defaultVersion);
-  const [stackTrace, setStackTrace] = useState('');
-  const [environment, setEnvironment] = useState('');
+  // What the app reported beats the newest release: it knows its own build.
+  const [appVersion, setAppVersion] = useState(prefill?.appVersion ?? defaultVersion);
+  const [stackTrace, setStackTrace] = useState(prefill?.stackTrace ?? '');
+  const [environment, setEnvironment] = useState(prefill?.environment ?? '');
   const [files, setFiles] = useState<Staged[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -140,6 +150,31 @@ export function NewBug({
 
         <div className="modal-body">
           {error ? <div className="error">{error}</div> : null}
+
+          {knownBug ? (
+            <div className="notice">
+              This crash is already reported as{' '}
+              <a
+                href={`#/bug/${knownBug.id}`}
+                onClick={(e) => {
+                  if (!onOpenBug) return;
+                  e.preventDefault();
+                  onOpenBug(knownBug.id);
+                }}
+              >
+                #{knownBug.id} {knownBug.title}
+              </a>
+              . You can still send this — it will be counted against that one rather than
+              opening a second ticket.
+            </div>
+          ) : null}
+
+          {prefill && Object.keys(prefill).length ? (
+            <p className="prefill-note">
+              ezmuze filled in what it knew about your setup. Please add what you were doing
+              when it happened.
+            </p>
+          ) : null}
 
           <div className="field">
             <label htmlFor="nb-title">Title</label>

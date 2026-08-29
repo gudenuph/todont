@@ -1,12 +1,49 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from './api';
-import type { BugCard, BugDetail, Meta, Session } from './types';
+import type { BugCard, BugDetail, Meta, Prefill, Session } from './types';
 import { Board } from './components/Board';
 import { SignIn } from './components/SignIn';
 import { NewBug } from './components/NewBug';
 import { RaiseButton } from './components/RaiseButton';
 import { BugView } from './components/BugView';
 import { Users } from './components/Users';
+
+/**
+ * A report ezmuze started for us, waiting on a person to finish it.
+ *
+ * The app has two ways in. A short report fits in the query string; anything
+ * carrying a stack trace posts to /api/drafts first and links to the id, since
+ * a trace will not survive a URL and would spill into every proxy log on the
+ * way.
+ */
+interface PendingRaise {
+  kind: string;
+  prefill: Prefill;
+  knownBug: BugCard | null;
+}
+
+/** Query-string form, for a report small enough to fit in a link. */
+function prefillFromQuery(params: URLSearchParams): Prefill | null {
+  const map: Array<[string, keyof Prefill]> = [
+    ['title', 'title'],
+    ['description', 'description'],
+    ['steps', 'steps'],
+    ['severity', 'severity'],
+    ['version', 'appVersion'],
+    ['appVersion', 'appVersion'],
+    ['platform', 'environment'],
+    ['environment', 'environment'],
+    ['stackTrace', 'stackTrace'],
+  ];
+
+  const prefill: Prefill = {};
+  for (const [param, field] of map) {
+    const value = params.get(param);
+    if (value) prefill[field] = value;
+  }
+
+  return Object.keys(prefill).length ? prefill : null;
+}
 
 /** Which bug the URL points at, so a bug can be linked to directly. */
 function bugFromHash(): number | null {
@@ -23,7 +60,7 @@ export function App() {
   const [loading, setLoading] = useState(true);
 
   const [signingIn, setSigningIn] = useState(false);
-  const [raising, setRaising] = useState<string | null>(null);
+  const [raising, setRaising] = useState<PendingRaise | null>(null);
   const [showUsers, setShowUsers] = useState(false);
   const [onlyMine, setOnlyMine] = useState(false);
   const [openBug, setOpenBug] = useState<number | null>(bugFromHash());
@@ -60,6 +97,53 @@ export function App() {
     const timer = setTimeout(() => void refresh(query, onlyMine), 250);
     return () => clearTimeout(timer);
   }, [query, onlyMine, refresh]);
+
+  /**
+   * Act on a link from the app, once, on load. Signing in is not required to
+   * *open* the form — only to submit it — but asking first is kinder than
+   * letting someone write out a report and then bounce them.
+   */
+  useEffect(() => {
+    if (loading || !meta) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const draftId = params.get('draft');
+    const raiseKind = params.get('raise');
+    if (!draftId && !raiseKind) return;
+
+    // Clear it immediately: a refresh should not reopen the form, and a draft
+    // id has no business sitting in the address bar afterwards.
+    history.replaceState(null, '', window.location.pathname + window.location.hash);
+
+    void (async () => {
+      if (draftId) {
+        try {
+          const { draft, knownBug } = await api.draft(draftId);
+          const { kind, ...prefill } = draft;
+          setRaising({
+            kind: kind ?? meta.kinds[0]?.key ?? 'bug',
+            prefill,
+            knownBug,
+          });
+        } catch (err) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : 'That prefilled report could not be loaded — raise it by hand',
+          );
+        }
+        return;
+      }
+
+      const prefill = prefillFromQuery(params) ?? {};
+      const known = meta.kinds.some((k) => k.key === raiseKind);
+      setRaising({
+        kind: known ? raiseKind! : (meta.kinds[0]?.key ?? 'bug'),
+        prefill,
+        knownBug: null,
+      });
+    })();
+  }, [loading, meta]);
 
   // Keep the modal and the address bar agreeing, both ways.
   useEffect(() => {
@@ -162,7 +246,10 @@ export function App() {
               />
               <span>Only my bugs</span>
             </label>
-            <RaiseButton kinds={meta?.kinds ?? []} onRaise={(k) => setRaising(k)} />
+            <RaiseButton
+              kinds={meta?.kinds ?? []}
+              onRaise={(k) => setRaising({ kind: k, prefill: {}, knownBug: null })}
+            />
             {isAdmin ? (
               <button className="btn ghost" onClick={() => setShowUsers(true)}>
                 Users
@@ -207,22 +294,44 @@ export function App() {
         />
       )}
 
-      {signingIn ? (
+      {/*
+        A pending report from the app takes over the sign-in prompt: whoever
+        arrived from a crash dialog gets signed in and dropped straight into the
+        form, rather than being left on an empty board wondering what happened.
+      */}
+      {signingIn || (raising && !session.user) ? (
         <SignIn
-          onClose={() => setSigningIn(false)}
+          reason={
+            raising && !session.user
+              ? 'ezmuze started a report for you. Sign in and it will be waiting, already filled in.'
+              : undefined
+          }
+          onClose={() => {
+            setSigningIn(false);
+            setRaising(null);
+          }}
           onDone={(user) => {
             setSigningIn(false);
-            void api.me().then(setSession).catch(() => setSession({ user }));
+            void api
+              .me()
+              .then(setSession)
+              .catch(() => setSession({ user }));
           }}
         />
       ) : null}
 
-      {raising && meta ? (
+      {raising && meta && session.user ? (
         <NewBug
-          kind={meta.kinds.find((k) => k.key === raising) ?? meta.kinds[0]}
+          kind={meta.kinds.find((k) => k.key === raising.kind) ?? meta.kinds[0]}
           environments={meta.environments ?? []}
           versions={meta.versions ?? []}
           defaultVersion={meta.defaultVersion ?? ''}
+          prefill={raising.prefill}
+          knownBug={raising.knownBug}
+          onOpenBug={(id) => {
+            setRaising(null);
+            openBugById(id);
+          }}
           onClose={() => setRaising(null)}
           onCreated={(bug) => {
             setRaising(null);
