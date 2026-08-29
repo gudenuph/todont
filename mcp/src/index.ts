@@ -341,6 +341,23 @@ server.registerTool(
 );
 
 server.registerTool(
+  'list_versions',
+  {
+    title: 'List ezmuze versions',
+    description:
+      'The versions a reporter can pick, newest release first with "Unreleased" last. Registered by the ezmuze publishing pipeline, so this changes without a deploy.',
+    inputSchema: {},
+  },
+  async () => {
+    try {
+      return reply(await call('/api/versions'));
+    } catch (err) {
+      return fail(err);
+    }
+  },
+);
+
+server.registerTool(
   'list_assignable',
   {
     title: 'List who a bug can be assigned to',

@@ -29,9 +29,20 @@ export interface ItemKind {
   levels: Level[];
 }
 
+export interface Version {
+  id: number;
+  name: string;
+  releasedAt: string | null;
+  isUnreleased: boolean;
+}
+
 export interface Meta {
   columns: BoardColumn[];
   environments: string[];
+  /** Newest release first, with "Unreleased" pinned last. */
+  versions: Version[];
+  /** The newest actual release — what a new report starts on. */
+  defaultVersion: string;
   kinds: ItemKind[];
   signInProvider: string;
 }

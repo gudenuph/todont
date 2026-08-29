@@ -133,7 +133,7 @@ cookie (the browser) or a token:
 Authorization: Bearer ezb_...
 ```
 
-Tokens carry scopes — `read`, `write`, `manage`, `admin` — and act as a user, so their
+Tokens carry scopes — `read`, `write`, `manage`, `admin`, `versions` — and act as a user, so their
 actions are attributed on the board like anyone else's. A token can never exceed what
 its user's role allows.
 
@@ -165,6 +165,41 @@ that retries on a flaky connection cannot spam the board.
 Everything lands in `unconfirmed` unless the token also has `manage` and passes
 `status`.
 
+### Registering a release (the publishing pipeline)
+
+Reporters pick their ezmuze version from a list rather than typing it, and the list is
+whatever publishing has registered:
+
+```http
+POST /api/versions
+Authorization: Bearer ezb_...
+Content-Type: application/json
+
+{ "name": "2026.9.0", "releasedAt": "2026-09-01T10:00:00Z" }
+```
+
+`releasedAt` is optional and defaults to now; pass it to backfill in the right order.
+The call is **idempotent on `name`** — a pipeline that re-runs gets `created: false` and
+HTTP 200 rather than an error it would have to special-case.
+
+This needs a token with the **`versions`** scope, which is deliberately separate from
+`manage`: publishing needs to register a release and nothing else, and a CI token that
+could also delete bugs would be far too much authority.
+
+```bash
+ssh root@your-host 'docker exec todont-tracker   node server/dist/cli.js token "ezmuze-publish"     --scopes read,versions --bot-name "ezmuze publishing" --role manager'
+```
+
+`GET /api/versions` is public and returns the list plus the default. **Unreleased** is
+seeded into the database, always sorts last, is reserved (publishing cannot claim the
+name) and cannot be deleted — someone reporting against a dev build still needs
+something to pick. A new report defaults to the newest actual release, so most reporters
+touch nothing.
+
+Bugs store the version as plain text, not a foreign key, so removing a version never
+rewrites history — and the picker keeps an unrecognised value selectable, so editing an
+old bug cannot silently drop the version it was raised against.
+
 ### The rest
 
 | | |
@@ -187,6 +222,9 @@ Everything lands in `unconfirmed` unless the token also has `manage` and passes
 | `GET /api/assignable` | who a bug can be assigned to — `manage` |
 | `GET /api/users`, `POST /api/users/:id/role` | — `admin` |
 | `GET/POST /api/tokens`, `DELETE /api/tokens/:id` | — `admin` |
+| `GET /api/versions` | the version list and the default (public) |
+| `POST /api/versions` | register a release — `versions` |
+| `DELETE /api/versions/:id` | remove a mistyped one — `admin` |
 | `GET /api/health` | liveness |
 
 Attachments accept PNG, JPEG, GIF, WebP, **WebM, MP4**, PDF and plain text — 50MB each

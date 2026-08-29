@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
-import type { BugDetail, ItemKind } from '../types';
+import type { BugDetail, ItemKind, Version } from '../types';
+import { VersionPicker } from './VersionPicker';
 
 const ACCEPT =
   'image/png,image/jpeg,image/gif,image/webp,video/webm,video/mp4,application/pdf,text/plain';
@@ -15,11 +16,15 @@ interface Staged {
 export function NewBug({
   kind,
   environments,
+  versions,
+  defaultVersion,
   onCreated,
   onClose,
 }: {
   kind: ItemKind;
   environments: string[];
+  versions: Version[];
+  defaultVersion: string;
   onCreated: (bug: BugDetail) => void;
   onClose: () => void;
 }) {
@@ -35,7 +40,8 @@ export function NewBug({
     // The middle of this kind's scale, not a key from another one.
     kind.levels[Math.min(2, kind.levels.length - 1)]?.key ?? '',
   );
-  const [appVersion, setAppVersion] = useState('');
+  // Most reports come from whoever is on the current build.
+  const [appVersion, setAppVersion] = useState(defaultVersion);
   const [environment, setEnvironment] = useState('');
   const [files, setFiles] = useState<Staged[]>([]);
   const [busy, setBusy] = useState(false);
@@ -213,12 +219,11 @@ export function NewBug({
             {shows('appVersion') ? (
               <div className="field">
                 <label htmlFor="nb-ver">ezmuze version</label>
-                <input
+                <VersionPicker
                   id="nb-ver"
-                  type="text"
                   value={appVersion}
-                  placeholder="e.g. 2026.8.1"
-                  onChange={(e) => setAppVersion(e.target.value)}
+                  versions={versions}
+                  onChange={setAppVersion}
                 />
               </div>
             ) : null}

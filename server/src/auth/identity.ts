@@ -5,8 +5,13 @@ import { db, type UserRow } from '../db.js';
 
 export const SESSION_COOKIE = 'todont_session';
 
-export type Scope = 'read' | 'write' | 'manage' | 'admin';
-export const ALL_SCOPES: Scope[] = ['read', 'write', 'manage', 'admin'];
+/**
+ * `versions` is deliberately its own scope rather than part of `manage`: the
+ * publishing pipeline needs to register a release and nothing else, and a CI
+ * token that could also delete bugs would be far too much authority.
+ */
+export type Scope = 'read' | 'write' | 'manage' | 'admin' | 'versions';
+export const ALL_SCOPES: Scope[] = ['read', 'write', 'manage', 'admin', 'versions'];
 
 export interface Actor {
   user: UserRow;
@@ -35,9 +40,9 @@ export function newToken(): string {
 function scopesForRole(role: UserRow['role']): Set<Scope> {
   switch (role) {
     case 'admin':
-      return new Set<Scope>(['read', 'write', 'manage', 'admin']);
+      return new Set<Scope>(['read', 'write', 'manage', 'admin', 'versions']);
     case 'manager':
-      return new Set<Scope>(['read', 'write', 'manage']);
+      return new Set<Scope>(['read', 'write', 'manage', 'versions']);
     default:
       return new Set<Scope>(['read', 'write']);
   }
@@ -211,7 +216,9 @@ export function requireScope(req: FastifyRequest, scope: Scope): Actor {
         ? 'Only managers can do that'
         : scope === 'admin'
           ? 'Only admins can do that'
-          : `Missing "${scope}" permission`,
+          : scope === 'versions'
+            ? 'That needs a token with the "versions" scope'
+            : `Missing "${scope}" permission`,
     );
   }
   return actor;

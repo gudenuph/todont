@@ -221,6 +221,8 @@ export function App() {
         <NewBug
           kind={meta.kinds.find((k) => k.key === raising) ?? meta.kinds[0]}
           environments={meta.environments ?? []}
+          versions={meta.versions ?? []}
+          defaultVersion={meta.defaultVersion ?? ''}
           onClose={() => setRaising(null)}
           onCreated={(bug) => {
             setRaising(null);
@@ -237,6 +239,7 @@ export function App() {
           columns={columns}
           environments={meta?.environments ?? []}
           kinds={meta?.kinds ?? []}
+          versions={meta?.versions ?? []}
           onChanged={applyBug}
           onDeleted={(id) => {
             setBugs((prev) => prev.filter((b) => b.id !== id));

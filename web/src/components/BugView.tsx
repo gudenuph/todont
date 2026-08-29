@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
-import type { BoardColumn, BugDetail, ItemKind, Session, User } from '../types';
+import type { BoardColumn, BugDetail, ItemKind, Session, User, Version } from '../types';
+import { VersionPicker } from './VersionPicker';
 import { levelColor, levelLabel } from '../severity';
 
 function when(iso: string): string {
@@ -64,6 +65,7 @@ interface Props {
   columns: BoardColumn[];
   environments: string[];
   kinds: ItemKind[];
+  versions: Version[];
   onChanged: (bug: BugDetail) => void;
   onDeleted: (id: number) => void;
   onClose: () => void;
@@ -76,6 +78,7 @@ export function BugView({
   columns,
   environments,
   kinds,
+  versions,
   onChanged,
   onDeleted,
   onClose,
@@ -326,12 +329,11 @@ export function BugView({
                     {shows('appVersion') ? (
                       <div className="field">
                         <label htmlFor="bv-version">ezmuze version</label>
-                        <input
+                        <VersionPicker
                           id="bv-version"
-                          type="text"
                           value={draft.appVersion}
-                          placeholder="e.g. 2026.8.1"
-                          onChange={(e) => setDraft({ ...draft, appVersion: e.target.value })}
+                          versions={versions}
+                          onChange={(v) => setDraft({ ...draft, appVersion: v })}
                         />
                       </div>
                     ) : null}

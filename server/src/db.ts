@@ -99,6 +99,18 @@ CREATE TABLE IF NOT EXISTS events (
 );
 CREATE INDEX IF NOT EXISTS idx_events_bug ON events(bug_id, id);
 
+-- Shipped versions, registered by the ezmuze publishing pipeline so reporters
+-- pick their build instead of typing it. Bugs keep the version as plain text,
+-- not a foreign key, so removing a version never rewrites history.
+CREATE TABLE IF NOT EXISTS versions (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  name           TEXT NOT NULL UNIQUE,
+  released_at    TEXT,                        -- null for the unreleased entry
+  is_unreleased  INTEGER NOT NULL DEFAULT 0,
+  created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_versions_order ON versions(is_unreleased, released_at DESC);
+
 CREATE TABLE IF NOT EXISTS api_tokens (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   name        TEXT NOT NULL,
@@ -127,6 +139,16 @@ function addColumnIfMissing(table: string, column: string, definition: string): 
 }
 
 addColumnIfMissing('bugs', 'kind', `TEXT NOT NULL DEFAULT '${DEFAULT_KIND}'`);
+
+/**
+ * Someone reporting against a build that is not out yet still needs something
+ * to pick, so this one is seeded rather than published. It always sorts last.
+ */
+export const UNRELEASED_VERSION = 'Unreleased';
+
+db.prepare(
+  `INSERT OR IGNORE INTO versions (name, released_at, is_unreleased) VALUES (?, NULL, 1)`,
+).run(UNRELEASED_VERSION);
 
 /** Clear out handshakes and sessions nobody finished. */
 export function pruneExpired(): void {

@@ -14,6 +14,7 @@ import { authRoutes } from './routes/auth.js';
 import { bugRoutes } from './routes/bugs.js';
 import { attachmentRoutes } from './routes/attachments.js';
 import { adminRoutes } from './routes/admin.js';
+import { versionRoutes, listVersions, serializeVersion, defaultVersion } from './routes/versions.js';
 
 const app = Fastify({
   logger: isProd
@@ -80,6 +81,10 @@ app.setErrorHandler((err: Error & { statusCode?: number }, req, reply) => {
 app.get('/api/meta', async () => ({
   columns: COLUMNS,
   environments: ENVIRONMENTS,
+  // Versions come from the database, not a constant: the publishing pipeline
+  // adds them, so they change without a deploy.
+  versions: listVersions().map(serializeVersion),
+  defaultVersion: defaultVersion(),
   // Each kind carries its own scale, wording and hidden fields, so the card,
   // the dialog and the raise menu all read from one place.
   kinds: KINDS,
@@ -92,6 +97,7 @@ await app.register(authRoutes);
 await app.register(bugRoutes);
 await app.register(attachmentRoutes);
 await app.register(adminRoutes);
+await app.register(versionRoutes);
 
 // ------------------------------------------------------------------ the SPA
 
