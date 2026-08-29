@@ -654,6 +654,15 @@ select:focus {
   gap: 20px;
 }
 
+/*
+ * Grid items default to min-width:auto, so one unbreakable line — a stack trace
+ * is nothing but those — stretches the column and drags the whole dialog off
+ * the screen. This lets the trace scroll inside its own box instead.
+ */
+.detail-grid > * {
+  min-width: 0;
+}
+
 .detail-section {
   margin-bottom: 18px;
 }
@@ -1060,4 +1069,34 @@ select:focus {
 
 .split-menu button:hover {
   background: var(--neutral-hover);
+}
+
+/* ------------------------------------------------------------- stack traces */
+
+textarea.mono,
+.stack {
+  font-family: 'Cascadia Mono', 'JetBrains Mono', Consolas, 'SF Mono', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* A trace is wide and must not stretch the dialog; it scrolls on its own. */
+.stack {
+  margin: 0;
+  padding: 10px 12px;
+  background: var(--backdrop);
+  border: 1px solid var(--border-soft);
+  border-left: 3px solid var(--red);
+  border-radius: var(--radius);
+  overflow-x: auto;
+  white-space: pre;
+  max-height: 300px;
+  color: #e7c3c3;
+}
+
+/* How many times a crash has been reported, as against merged duplicates. */
+.pill.hits {
+  background: rgba(150, 200, 255, 0.16);
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
 }

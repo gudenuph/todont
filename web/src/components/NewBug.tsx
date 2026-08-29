@@ -42,6 +42,7 @@ export function NewBug({
   );
   // Most reports come from whoever is on the current build.
   const [appVersion, setAppVersion] = useState(defaultVersion);
+  const [stackTrace, setStackTrace] = useState('');
   const [environment, setEnvironment] = useState('');
   const [files, setFiles] = useState<Staged[]>([]);
   const [busy, setBusy] = useState(false);
@@ -104,6 +105,7 @@ export function NewBug({
         expected: shows('expected') ? expected : '',
         actual: shows('actual') ? actual : '',
         appVersion: shows('appVersion') ? appVersion : '',
+        stackTrace: shows('stackTrace') ? stackTrace : '',
       });
 
       if (files.length) {
@@ -228,6 +230,24 @@ export function NewBug({
               </div>
             ) : null}
           </div>
+
+          {shows('stackTrace') ? (
+            <div className="field">
+              <label htmlFor="nb-stack">Error message or stack trace</label>
+              <textarea
+                id="nb-stack"
+                className="mono"
+                rows={5}
+                value={stackTrace}
+                placeholder="Paste the whole thing, if ezmuze showed you one"
+                onChange={(e) => setStackTrace(e.target.value)}
+              />
+              <div className="hint">
+                Optional, but it is the fastest way to match your report to one already
+                being worked on. Usernames and file paths are stripped before it is saved.
+              </div>
+            </div>
+          ) : null}
 
           <div className="field">
             <label htmlFor="nb-env">Where it happened</label>

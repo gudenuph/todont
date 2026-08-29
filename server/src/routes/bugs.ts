@@ -19,9 +19,12 @@ import {
   serializeDetail,
   unmergeBug,
 } from '../lib/bugs.js';
+import { fingerprintStackTrace, normalizeStackTrace } from '../lib/stacktrace.js';
+import { findByFingerprint, recordOccurrence } from './stacktraces.js';
 
 const MAX_TITLE = 200;
 const MAX_BODY = 20_000;
+const MAX_TRACE = 20_000;
 
 function text(value: unknown, max: number, field: string): string {
   if (value === undefined || value === null) return '';
@@ -101,6 +104,7 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
       externalRef?: string;
       status?: string;
       kind?: string;
+      stackTrace?: string;
     };
   }>('/api/bugs', async (req, reply) => {
     const actor = requireScope(req, 'write');
@@ -134,6 +138,28 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
       }
     }
 
+    // A trace is stored already normalised, so no username or machine path
+    // reaches a board that anybody can read.
+    const rawTrace = text(body.stackTrace, MAX_TRACE, 'Stack trace');
+    const stackTrace = rawTrace ? normalizeStackTrace(rawTrace) : '';
+    const fingerprint = rawTrace ? fingerprintStackTrace(rawTrace) : null;
+
+    // Same crash, already on the board: count the sighting and hand back what
+    // is already there. This is what makes the flow safe for a client that
+    // skips /api/stack-traces/check and just reports every crash.
+    if (fingerprint) {
+      const known = findByFingerprint(fingerprint);
+      if (known) {
+        const updated = recordOccurrence(known, actor.user.id);
+        return reply.code(200).send({
+          bug: serializeDetail(updated),
+          created: false,
+          alreadyRaised: true,
+          occurrences: updated.occurrences,
+        });
+      }
+    }
+
     // Everything lands in the intake column; only a manager may raise it
     // straight into a triaged one.
     let status = INTAKE_COLUMN;
@@ -146,8 +172,9 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
       .prepare(
         `INSERT INTO bugs
            (title, description, steps, expected, actual, severity, kind,
+            stack_trace, stack_fingerprint,
             app_version, environment, status, position, reporter_id, source, external_ref)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
       )
       .run(
         title,
@@ -157,6 +184,8 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
         text(body.actual, MAX_BODY, 'Actual result'),
         severity,
         kind,
+        stackTrace,
+        fingerprint,
         text(body.appVersion, 100, 'App version'),
         text(body.environment, 500, 'Environment'),
         status,
@@ -232,6 +261,12 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
       }
       sets.push('severity = ?');
       params.push(body.severity);
+    }
+
+    if (body.stackTrace !== undefined) {
+      const raw = text(body.stackTrace, MAX_TRACE, 'Stack trace');
+      sets.push('stack_trace = ?', 'stack_fingerprint = ?');
+      params.push(raw ? normalizeStackTrace(raw) : '', raw ? fingerprintStackTrace(raw) : null);
     }
 
     if (!sets.length) return { bug: serializeDetail(bug) };

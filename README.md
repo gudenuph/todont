@@ -200,6 +200,51 @@ Bugs store the version as plain text, not a foreign key, so removing a version n
 rewrites history — and the picker keeps an unrecognised value selectable, so editing an
 old bug cannot silently drop the version it was raised against.
 
+### Crash reporting: "have you seen this?"
+
+ezmuze can ask whether a crash is already known before it bothers anyone:
+
+```http
+POST /api/stack-traces/check
+Authorization: Bearer ezb_...
+Content-Type: application/json
+
+{ "stackTrace": "System.IO.DirectoryNotFoundException: ..." }
+```
+
+- **Seen before** → `{ "raised": true, "occurrences": 42, "bug": {...} }`, and the count
+  on that ticket goes up by one.
+- **New** → `{ "raised": false, "fingerprint": "...", "normalized": "..." }`. Pass the
+  trace to `POST /api/bugs` as `stackTrace` to raise it.
+
+Needs `write`. `GET /api/stack-traces/:fingerprint` returns the full ticket behind one.
+
+**Matching.** The same fault reaches us as different text on every machine, so the trace
+is normalised before it is hashed: home directories become `<HOME>`, temp folders
+`<TMP>`, GUIDs `<GUID>`, heap addresses `<ADDR>`, and a dotted version inside a *path*
+becomes `<VERSION>` — an install directory named after the release would otherwise make
+the same crash look new on every ship. A second pass, used only for matching and never
+shown, folds path separators and .NET runtime identifiers (`win-x64-dx`, `osx-arm64`,
+`linux-x64`) together, so one fault in shared code is one ticket across all three
+platforms rather than three.
+
+Match is then **exact on the normalised text**. That is deliberate: a reporter can be
+told precisely why two traces did or did not group, which a similarity score cannot.
+A version quoted in a message ("expected 2.0 or later") is left alone — only paths are
+generalised. Anything under 20 characters after normalising is refused, so "it crashed"
+cannot become the parent of every future crash.
+
+**Traces are stored already normalised**, so no username or machine path lands on a
+board that anyone can read.
+
+`POST /api/bugs` applies the same matching: raising a bug whose trace is already known
+returns the existing ticket with `created: false`, `alreadyRaised: true` and the new
+count, instead of a duplicate. A client that skips the check call and just reports every
+crash still behaves correctly.
+
+The count shows as `↻ 42` on the card and "Seen 42 times" on the ticket, and is separate
+from merged duplicates (`×3`), which count people who reported it by hand.
+
 ### The rest
 
 | | |
@@ -222,6 +267,8 @@ old bug cannot silently drop the version it was raised against.
 | `GET /api/assignable` | who a bug can be assigned to — `manage` |
 | `GET /api/users`, `POST /api/users/:id/role` | — `admin` |
 | `GET/POST /api/tokens`, `DELETE /api/tokens/:id` | — `admin` |
+| `POST /api/stack-traces/check` | is this crash known? counts it if so — `write` |
+| `GET /api/stack-traces/:fingerprint` | the ticket behind a fingerprint (public) |
 | `GET /api/versions` | the version list and the default (public) |
 | `POST /api/versions` | register a release — `versions` |
 | `DELETE /api/versions/:id` | remove a mistyped one — `admin` |

@@ -57,6 +57,7 @@ interface Draft {
   actual: string;
   appVersion: string;
   environment: string;
+  stackTrace: string;
 }
 
 interface Props {
@@ -156,6 +157,7 @@ export function BugView({
       actual: bug.actual,
       appVersion: bug.appVersion,
       environment: bug.environment,
+      stackTrace: bug.stackTrace,
     });
   }
 
@@ -325,6 +327,23 @@ export function BugView({
                       ) : null}
                     </div>
                   ) : null}
+                  {shows('stackTrace') ? (
+                    <div className="field">
+                      <label htmlFor="bv-stack">Stack trace</label>
+                      <textarea
+                        id="bv-stack"
+                        className="mono"
+                        rows={5}
+                        value={draft.stackTrace}
+                        onChange={(e) => setDraft({ ...draft, stackTrace: e.target.value })}
+                      />
+                      <div className="hint">
+                        Editing this re-matches future reports, so an existing count stays
+                        but new crashes will only join if they match the new text.
+                      </div>
+                    </div>
+                  ) : null}
+
                   <div className="field-row">
                     {shows('appVersion') ? (
                       <div className="field">
@@ -373,6 +392,16 @@ export function BugView({
                   {shows('steps') ? <Section title="Steps to reproduce" body={bug.steps} /> : null}
                   {shows('expected') ? <Section title="Expected" body={bug.expected} /> : null}
                   {shows('actual') ? <Section title="Actual" body={bug.actual} /> : null}
+                  {shows('stackTrace') && bug.stackTrace ? (
+                    <div className="detail-section">
+                      <h3>Stack trace</h3>
+                      <pre className="stack">{bug.stackTrace}</pre>
+                      <div className="hint">
+                        Paths and usernames were generalised before saving; this is what
+                        new reports are matched against.
+                      </div>
+                    </div>
+                  ) : null}
                 </>
               )}
 
@@ -531,6 +560,14 @@ export function BugView({
                   {levelLabel(kind, bug.severity)}
                 </span>
               </div>
+              {bug.occurrences > 1 ? (
+                <div className="sidebar-row">
+                  <span>Seen</span>
+                  <span title="Automatic reports matching this stack trace">
+                    {bug.occurrences.toLocaleString()} times
+                  </span>
+                </div>
+              ) : null}
               <div className="sidebar-row">
                 <span>Reported by</span>
                 <span>{bug.reporter?.name ?? 'unknown'}</span>

@@ -110,7 +110,7 @@ export const KINDS: ItemKind[] = [
     emoji: '\u{1F4A1}',
     article: 'a feature request',
     // Reproduction fields: there is nothing to reproduce.
-    hiddenFields: ['steps', 'expected', 'actual', 'appVersion'],
+    hiddenFields: ['steps', 'expected', 'actual', 'appVersion', 'stackTrace'],
     labels: {
       description: 'What you would like',
       severity: 'How much do you want it?',

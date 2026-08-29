@@ -390,6 +390,11 @@ function CardFace({ bug, kind }: { bug: Bug; kind: ItemKind | undefined }) {
         <span className="id">#{bug.id}</span>
         <span>{levelShort(kind, bug.severity)}</span>
         <span className="grow" />
+        {bug.occurrences > 1 ? (
+          <span className="pill hits" title={`Reported automatically ${bug.occurrences} times`}>
+            ↻ {bug.occurrences.toLocaleString()}
+          </span>
+        ) : null}
         {bug.duplicateCount > 0 ? (
           <span className="pill dup" title={`${bug.duplicateCount} merged duplicate(s)`}>
             ×{bug.duplicateCount + 1}

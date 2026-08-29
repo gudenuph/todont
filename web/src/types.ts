@@ -73,6 +73,8 @@ export interface BugCard {
   externalRef: string | null;
   reporter: User | null;
   assignee: User | null;
+  /** How many times this crash has been reported. */
+  occurrences: number;
   commentCount: number;
   attachmentCount: number;
   duplicateCount: number;
@@ -113,6 +115,8 @@ export interface BugDetail extends BugCard {
   actual: string;
   appVersion: string;
   environment: string;
+  stackTrace: string;
+  stackFingerprint: string | null;
   attachments: Attachment[];
   comments: Comment[];
   events: BugEvent[];

@@ -60,6 +60,7 @@ export function serializeCard(b: CardRow) {
     externalRef: b.external_ref,
     reporter: publicUser(user(b.reporter_id)),
     assignee: publicUser(user(b.assignee_id)),
+    occurrences: b.occurrences,
     commentCount: b.comment_count,
     attachmentCount: b.attachment_count,
     duplicateCount: b.duplicate_count,
@@ -113,6 +114,8 @@ export function serializeDetail(b: BugRow) {
     actual: b.actual,
     appVersion: b.app_version,
     environment: b.environment,
+    stackTrace: b.stack_trace,
+    stackFingerprint: b.stack_fingerprint,
     attachments: attachments.map((a) => ({
       id: a.id,
       url: `/api/attachments/${a.id}`,

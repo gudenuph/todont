@@ -52,6 +52,9 @@ CREATE TABLE IF NOT EXISTS bugs (
   actual         TEXT NOT NULL DEFAULT '',
   severity       TEXT NOT NULL DEFAULT 'minor',
   kind           TEXT NOT NULL DEFAULT '${DEFAULT_KIND}',  -- bug | feature
+  stack_trace    TEXT NOT NULL DEFAULT '',   -- stored already normalised
+  stack_fingerprint TEXT,                    -- sha256 of the normalised trace
+  occurrences    INTEGER NOT NULL DEFAULT 1, -- how many times it has been hit
   app_version    TEXT NOT NULL DEFAULT '',
   environment    TEXT NOT NULL DEFAULT '',
   status         TEXT NOT NULL DEFAULT '${INTAKE_COLUMN}',
@@ -139,6 +142,13 @@ function addColumnIfMissing(table: string, column: string, definition: string): 
 }
 
 addColumnIfMissing('bugs', 'kind', `TEXT NOT NULL DEFAULT '${DEFAULT_KIND}'`);
+addColumnIfMissing('bugs', 'stack_trace', `TEXT NOT NULL DEFAULT ''`);
+addColumnIfMissing('bugs', 'stack_fingerprint', `TEXT`);
+addColumnIfMissing('bugs', 'occurrences', `INTEGER NOT NULL DEFAULT 1`);
+
+// Not unique: a fingerprint can legitimately appear on a bug and on duplicates
+// merged into it, and the lookup resolves to the one still on the board.
+db.exec(`CREATE INDEX IF NOT EXISTS idx_bugs_fingerprint ON bugs(stack_fingerprint)`);
 
 /**
  * Someone reporting against a build that is not out yet still needs something
@@ -175,6 +185,9 @@ export interface BugRow {
   actual: string;
   severity: string;
   kind: string;
+  stack_trace: string;
+  stack_fingerprint: string | null;
+  occurrences: number;
   app_version: string;
   environment: string;
   status: string;
