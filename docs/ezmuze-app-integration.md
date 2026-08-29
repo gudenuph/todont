@@ -3,9 +3,14 @@
 Brief for whoever implements the app side. The tracker is live and all of this is
 working today — nothing here is planned.
 
-Everything below is **unauthenticated**. Do not put a token in the app: it ships to
-everyone who can read the binary. None of these endpoints create a bug on their own — a
-report only exists once a signed-in person submits it in the browser.
+Everything below is **unauthenticated — the app needs no token, ever.** Do not embed one:
+a credential shipped in a desktop app is a credential shipped to everyone who can read
+the binary.
+
+That is safe because none of these endpoints let the caller choose what gets written. A
+draft is inert text that only becomes a bug when a signed-in person submits it in the
+browser; the crash check picks no bug and sets no content — it hands over a trace and the
+server decides, from a hash, whether an existing counter moves by one.
 
 ---
 
@@ -83,7 +88,6 @@ Before showing the user a "report this?" prompt, you can ask:
 
 ```http
 POST https://bugs.ezmuze.studio/api/stack-traces/check
-Authorization: Bearer <token with "write" scope>
 Content-Type: application/json
 
 { "stackTrace": "..." }
@@ -91,12 +95,12 @@ Content-Type: application/json
 
 - `{ "raised": true, "occurrences": 42, "bug": {...} }` — already known, and the counter
   on that ticket has just gone up. You could say "this is a known issue, already reported
-  42 times" and skip the prompt.
+  42 times" and skip the prompt, or offer a "report it anyway" button.
 - `{ "raised": false, "fingerprint": "..." }` — new, worth asking the user to report.
 
-**This one does need a token**, because it writes a counter. If you would rather not ship
-a credential, skip this step entirely: `POST /api/drafts` already tells the *browser*
-when the crash is known, and the form warns the user before they write anything.
+**No token needed here either.** Calling it counts the crash, so it is worth calling on
+every crash even when you do not prompt: that is how the board learns which faults are
+actually common. Rate limited to 120 per hour per IP.
 
 ---
 

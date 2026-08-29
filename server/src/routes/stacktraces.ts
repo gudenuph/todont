@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { db, logEvent, type BugRow } from '../db.js';
-import { HttpError, canSeeStackTrace, requireScope } from '../auth/identity.js';
+import { HttpError, canSeeStackTrace } from '../auth/identity.js';
 import { fingerprintStackTrace, normalizeStackTrace } from '../lib/stacktrace.js';
 import { requireBug, resolveCanonical, serializeCard, serializeDetail } from '../lib/bugs.js';
 
@@ -50,9 +50,21 @@ export async function stackTraceRoutes(app: FastifyInstance): Promise<void> {
    * the client can show the user it is already known. A miss answers
    * `raised: false` and hands back the fingerprint, which the client can pass
    * straight to POST /api/bugs.
+   *
+   * Deliberately unauthenticated, for the same reason as /api/drafts: a token
+   * shipped inside a desktop app is a token shipped to everyone who can read
+   * the binary. This one writes, but the caller cannot choose *what* — it picks
+   * no bug, sets no content and creates nothing. It hands over a trace and the
+   * server decides, from a hash, whether an existing counter moves by one.
+   *
+   * To move a counter at all you must already hold the real trace, which means
+   * you have the app and have hit the crash — in which case the count is
+   * honest. Rate limiting caps how fast anyone can repeat that.
    */
-  app.post<{ Body: { stackTrace?: string } }>('/api/stack-traces/check', async (req) => {
-    const actor = requireScope(req, 'write');
+  app.post<{ Body: { stackTrace?: string } }>(
+    '/api/stack-traces/check',
+    { config: { rateLimit: { max: 120, timeWindow: '1 hour' } } },
+    async (req) => {
     const raw = req.body?.stackTrace ?? '';
 
     if (typeof raw !== 'string' || raw.trim() === '') {
@@ -81,7 +93,7 @@ export async function stackTraceRoutes(app: FastifyInstance): Promise<void> {
       };
     }
 
-    const updated = recordOccurrence(existing, actor.user.id);
+    const updated = recordOccurrence(existing, req.actor?.user.id ?? null);
 
     app.log.info(
       { bug: updated.id, occurrences: updated.occurrences, fingerprint },
@@ -100,7 +112,8 @@ export async function stackTraceRoutes(app: FastifyInstance): Promise<void> {
       }),
       url: `/api/bugs/${updated.id}`,
     };
-  });
+    },
+  );
 
   /** The full ticket behind a fingerprint, for a client that wants to show it. */
   app.get<{ Params: { fingerprint: string } }>(

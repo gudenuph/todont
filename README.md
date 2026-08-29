@@ -217,7 +217,13 @@ Content-Type: application/json
 - **New** → `{ "raised": false, "fingerprint": "...", "normalized": "..." }`. Pass the
   trace to `POST /api/bugs` as `stackTrace` to raise it.
 
-Needs `write`. `GET /api/stack-traces/:fingerprint` returns the full ticket behind one.
+**No credential needed**, and deliberately so. It writes, but the caller cannot choose
+what: it picks no bug, sets no content and creates nothing — it hands over a trace and the
+server decides, from a hash, whether an existing counter moves by one. Moving a counter at
+all means already holding the real trace, which means having the app and having hit the
+crash, in which case the count is honest. Rate limited to 120 per hour per IP.
+
+`GET /api/stack-traces/:fingerprint` returns the ticket behind one.
 
 **Matching.** The same fault reaches us as different text on every machine, so the trace
 is normalised before it is hashed: home directories become `<HOME>`, temp folders
@@ -313,7 +319,7 @@ the filled-in form afterwards — the prefill survives the handshake.
 | `GET/POST /api/tokens`, `DELETE /api/tokens/:id` | — `admin` |
 | `POST /api/drafts` | prefilled report from the app (no credential, rate limited) |
 | `GET /api/drafts/:id` | read one back, with `knownBug` if the crash is known |
-| `POST /api/stack-traces/check` | is this crash known? counts it if so — `write` |
+| `POST /api/stack-traces/check` | is this crash known? counts it if so (no credential) |
 | `GET /api/stack-traces/:fingerprint` | the ticket behind a fingerprint (public) |
 | `GET /api/versions` | the version list and the default (public) |
 | `POST /api/versions` | register a release — `versions` |
