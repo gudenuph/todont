@@ -3,7 +3,7 @@ import path from 'node:path';
 import { config } from '../config.js';
 import { db, logEvent, type BugRow, type UserRow } from '../db.js';
 import { HttpError, publicUser } from '../auth/identity.js';
-import { isColumn } from '../columns.js';
+import { isColumn, isKind } from '../columns.js';
 
 const POSITION_GAP = 1000;
 
@@ -53,6 +53,7 @@ export function serializeCard(b: CardRow) {
     id: b.id,
     title: b.title,
     severity: b.severity,
+    kind: b.kind,
     status: b.status,
     position: b.position,
     source: b.source,
@@ -140,6 +141,7 @@ export function serializeDetail(b: BugRow) {
 
 export interface ListFilters {
   status?: string;
+  kind?: string;
   q?: string;
   assigneeId?: number;
   /** "My bugs": raised by this user, or waiting on them. */
@@ -158,6 +160,12 @@ export function listBugs(filters: ListFilters = {}) {
     if (!isColumn(filters.status)) throw new HttpError(400, `Unknown column "${filters.status}"`);
     where.push('b.status = ?');
     params.push(filters.status);
+  }
+
+  if (filters.kind) {
+    if (!isKind(filters.kind)) throw new HttpError(400, `Unknown kind "${filters.kind}"`);
+    where.push('b.kind = ?');
+    params.push(filters.kind);
   }
 
   if (filters.assigneeId !== undefined) {

@@ -86,15 +86,17 @@ server.registerTool(
       'The board. Filter by column, free text, or assignee. Merged duplicates are hidden unless asked for.',
     inputSchema: {
       status: z.string().optional().describe('Column key, e.g. "unconfirmed" or "in-progress"'),
+      kind: z.enum(['bug', 'feature']).optional().describe('Only bugs, or only feature requests'),
       q: z.string().optional().describe('Free-text search over title, description and steps'),
       assigneeId: z.number().optional(),
       includeMerged: z.boolean().optional(),
     },
   },
-  async ({ status, q, assigneeId, includeMerged }) => {
+  async ({ status, kind, q, assigneeId, includeMerged }) => {
     try {
       const qs = new URLSearchParams();
       if (status) qs.set('status', status);
+      if (kind) qs.set('kind', kind);
       if (q) qs.set('q', q);
       if (assigneeId !== undefined) qs.set('assignee', String(assigneeId));
       if (includeMerged) qs.set('includeMerged', 'true');
@@ -138,6 +140,10 @@ server.registerTool(
       appVersion: z.string().optional(),
       environment: z.string().optional(),
       status: z.string().optional(),
+      kind: z
+        .enum(['bug', 'feature'])
+        .optional()
+        .describe('Defaults to "bug". A feature request rides the same board and columns.'),
       externalRef: z.string().optional(),
     },
   },
@@ -163,6 +169,7 @@ server.registerTool(
       expected: z.string().optional(),
       actual: z.string().optional(),
       severity: z.enum(['critical', 'major', 'minor', 'trivial']).optional(),
+      kind: z.enum(['bug', 'feature']).optional().describe('Retype the ticket'),
       appVersion: z.string().optional(),
       environment: z.string().optional(),
     },

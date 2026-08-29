@@ -61,3 +61,50 @@ export const ENVIRONMENTS = [
   'Linux (desktop)',
   'Other',
 ] as const;
+
+/**
+ * What kind of thing a ticket is. A feature request is a bug row with this flag
+ * — same board, same columns, same triage — because the workflow really is the
+ * same and a second table would only duplicate it.
+ *
+ * The emoji is served rather than hardcoded in the client so the card, the
+ * dialog and the raise menu cannot drift apart.
+ */
+export interface ItemKind {
+  key: string;
+  label: string;
+  emoji: string;
+  /** For the raise menu: "Raise a bug", "Raise a feature request". */
+  article: string;
+  /** Fields that make no sense for this kind and are hidden in the UI. */
+  hiddenFields: string[];
+  /** Kind-specific wording for the fields that are shown. */
+  labels: Record<string, string>;
+}
+
+export const KINDS: ItemKind[] = [
+  {
+    key: 'bug',
+    label: 'Bug',
+    emoji: '\u{1F41E}',
+    article: 'a bug',
+    hiddenFields: [],
+    labels: { description: 'What happened', severity: 'Severity' },
+  },
+  {
+    key: 'feature',
+    label: 'Feature request',
+    emoji: '\u{1F4A1}',
+    article: 'a feature request',
+    // Reproduction fields: there is nothing to reproduce.
+    hiddenFields: ['steps', 'expected', 'actual', 'appVersion'],
+    labels: { description: 'What you would like', severity: 'Priority' },
+  },
+];
+
+export const KIND_KEYS = KINDS.map((k) => k.key);
+export const DEFAULT_KIND = 'bug';
+
+export function isKind(value: unknown): value is string {
+  return typeof value === 'string' && KIND_KEYS.includes(value);
+}

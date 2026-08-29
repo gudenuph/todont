@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
-import type { BugDetail } from '../types';
+import type { BugDetail, ItemKind } from '../types';
 
 const ACCEPT =
   'image/png,image/jpeg,image/gif,image/webp,video/webm,video/mp4,application/pdf,text/plain';
@@ -13,16 +13,21 @@ interface Staged {
 }
 
 export function NewBug({
+  kind,
   severities,
   environments,
   onCreated,
   onClose,
 }: {
+  kind: ItemKind;
   severities: string[];
   environments: string[];
   onCreated: (bug: BugDetail) => void;
   onClose: () => void;
 }) {
+  /** The server decides which fields this kind has no use for. */
+  const shows = (field: string) => !kind.hiddenFields.includes(field);
+  const labelFor = (field: string, fallback: string) => kind.labels[field] ?? fallback;
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [steps, setSteps] = useState('');
@@ -83,12 +88,15 @@ export function NewBug({
       const { bug } = await api.createBug({
         title,
         description,
-        steps,
-        expected,
-        actual,
         severity,
-        appVersion,
         environment,
+        kind: kind.key,
+        // Hidden fields are never sent, so a feature request cannot carry
+        // reproduction text somebody typed before switching kind.
+        steps: shows('steps') ? steps : '',
+        expected: shows('expected') ? expected : '',
+        actual: shows('actual') ? actual : '',
+        appVersion: shows('appVersion') ? appVersion : '',
       });
 
       if (files.length) {
@@ -110,7 +118,12 @@ export function NewBug({
     <div className="scrim" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} onPaste={onPaste}>
         <div className="modal-head">
-          <h2>Raise a bug</h2>
+          <h2>
+            <span className="kind-emoji" aria-hidden="true">
+              {kind.emoji}
+            </span>{' '}
+            Raise {kind.article}
+          </h2>
           <button className="close" onClick={onClose} aria-label="Close">
             ×
           </button>
@@ -132,51 +145,62 @@ export function NewBug({
           </div>
 
           <div className="field">
-            <label htmlFor="nb-desc">What happened</label>
+            <label htmlFor="nb-desc">{labelFor('description', 'What happened')}</label>
             <textarea
               id="nb-desc"
               rows={3}
               value={description}
-              placeholder="Describe the problem"
+              placeholder={
+                shows('steps') ? 'Describe the problem' : 'Describe what you would like, and why'
+              }
               onChange={(e) => setDescription(e.target.value)}
             />
           </div>
 
-          <div className="field">
-            <label htmlFor="nb-steps">Steps to reproduce</label>
-            <textarea
-              id="nb-steps"
-              rows={3}
-              value={steps}
-              placeholder={'1. Open…\n2. Click…\n3. See…'}
-              onChange={(e) => setSteps(e.target.value)}
-            />
-          </div>
+          {/* Reproduction fields: nothing to reproduce on a feature request. */}
+          {shows('steps') ? (
+            <div className="field">
+              <label htmlFor="nb-steps">Steps to reproduce</label>
+              <textarea
+                id="nb-steps"
+                rows={3}
+                value={steps}
+                placeholder={'1. Open…\n2. Click…\n3. See…'}
+                onChange={(e) => setSteps(e.target.value)}
+              />
+            </div>
+          ) : null}
+
+          {shows('expected') || shows('actual') ? (
+            <div className="field-row">
+              {shows('expected') ? (
+                <div className="field">
+                  <label htmlFor="nb-expected">Expected</label>
+                  <textarea
+                    id="nb-expected"
+                    rows={2}
+                    value={expected}
+                    onChange={(e) => setExpected(e.target.value)}
+                  />
+                </div>
+              ) : null}
+              {shows('actual') ? (
+                <div className="field">
+                  <label htmlFor="nb-actual">Actual</label>
+                  <textarea
+                    id="nb-actual"
+                    rows={2}
+                    value={actual}
+                    onChange={(e) => setActual(e.target.value)}
+                  />
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="field-row">
             <div className="field">
-              <label htmlFor="nb-expected">Expected</label>
-              <textarea
-                id="nb-expected"
-                rows={2}
-                value={expected}
-                onChange={(e) => setExpected(e.target.value)}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="nb-actual">Actual</label>
-              <textarea
-                id="nb-actual"
-                rows={2}
-                value={actual}
-                onChange={(e) => setActual(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="field-row">
-            <div className="field">
-              <label htmlFor="nb-sev">Severity</label>
+              <label htmlFor="nb-sev">{labelFor('severity', 'Severity')}</label>
               <select id="nb-sev" value={severity} onChange={(e) => setSeverity(e.target.value)}>
                 {severities.map((s) => (
                   <option key={s} value={s}>
@@ -185,16 +209,18 @@ export function NewBug({
                 ))}
               </select>
             </div>
-            <div className="field">
-              <label htmlFor="nb-ver">ezmuze version</label>
-              <input
-                id="nb-ver"
-                type="text"
-                value={appVersion}
-                placeholder="e.g. 2026.8.1"
-                onChange={(e) => setAppVersion(e.target.value)}
-              />
-            </div>
+            {shows('appVersion') ? (
+              <div className="field">
+                <label htmlFor="nb-ver">ezmuze version</label>
+                <input
+                  id="nb-ver"
+                  type="text"
+                  value={appVersion}
+                  placeholder="e.g. 2026.8.1"
+                  onChange={(e) => setAppVersion(e.target.value)}
+                />
+              </div>
+            ) : null}
           </div>
 
           <div className="field">
@@ -282,7 +308,7 @@ export function NewBug({
             Cancel
           </button>
           <button className="btn primary" onClick={submit} disabled={busy}>
-            {busy ? 'Raising…' : 'Raise bug'}
+            {busy ? 'Raising…' : `Raise ${kind.label.toLowerCase()}`}
           </button>
         </div>
       </div>

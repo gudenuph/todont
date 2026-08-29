@@ -13,7 +13,7 @@ import {
   type DragMoveEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
-import type { BoardColumn, BugCard as Bug } from '../types';
+import type { BoardColumn, BugCard as Bug, ItemKind } from '../types';
 import { severityColor } from '../severity';
 
 /** How much of a card's height (top and bottom) counts as "between cards". */
@@ -37,13 +37,15 @@ interface DropIndicator {
 interface Props {
   bugs: Bug[];
   columns: BoardColumn[];
+  kinds: ItemKind[];
   canManage: boolean;
   onOpen: (id: number) => void;
   onMove: (id: number, status: string, index: number) => void;
   onMerge: (id: number, intoId: number) => void;
 }
 
-export function Board({ bugs, columns, canManage, onOpen, onMove, onMerge }: Props) {
+export function Board({ bugs, columns, kinds, canManage, onOpen, onMove, onMerge }: Props) {
+  const kindOf = (key: string) => kinds.find((k) => k.key === key);
   const [activeId, setActiveId] = useState<number | null>(null);
   const [mergeTarget, setMergeTarget] = useState<number | null>(null);
   const [indicator, setIndicator] = useState<DropIndicator | null>(null);
@@ -215,6 +217,7 @@ export function Board({ bugs, columns, canManage, onOpen, onMove, onMerge }: Pro
             activeId={activeId}
             mergeTarget={mergeTarget}
             indicator={indicator?.column === column.key ? indicator.renderIndex : null}
+            kindOf={kindOf}
             onOpen={onOpen}
           />
         ))}
@@ -226,7 +229,7 @@ export function Board({ bugs, columns, canManage, onOpen, onMove, onMerge }: Pro
             className="card"
             style={{ '--sev-color': severityColor(active.severity) } as React.CSSProperties}
           >
-            <CardFace bug={active} />
+            <CardFace bug={active} kind={kindOf(active.kind)} />
           </div>
         ) : null}
       </DragOverlay>
@@ -257,6 +260,7 @@ function Column({
   activeId,
   mergeTarget,
   indicator,
+  kindOf,
   onOpen,
 }: {
   column: BoardColumn;
@@ -265,6 +269,7 @@ function Column({
   activeId: number | null;
   mergeTarget: number | null;
   indicator: number | null;
+  kindOf: (key: string) => ItemKind | undefined;
   onOpen: (id: number) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: columnId(column.key) });
@@ -302,6 +307,7 @@ function Column({
               bug={bug}
               canManage={canManage}
               isMergeTarget={mergeTarget === bug.id}
+              kind={kindOf(bug.kind)}
               onOpen={onOpen}
             />
           </div>
@@ -333,11 +339,13 @@ function DraggableCard({
   bug,
   canManage,
   isMergeTarget,
+  kind,
   onOpen,
 }: {
   bug: Bug;
   canManage: boolean;
   isMergeTarget: boolean;
+  kind: ItemKind | undefined;
   onOpen: (id: number) => void;
 }) {
   const draggable = useDraggable({ id: cardId(bug.id), disabled: !canManage });
@@ -366,13 +374,13 @@ function DraggableCard({
         }
       }}
     >
-      <CardFace bug={bug} />
+      <CardFace bug={bug} kind={kind} />
     </div>
   );
 }
 
 /** The card's contents, shared by the board and the drag overlay. */
-function CardFace({ bug }: { bug: Bug }) {
+function CardFace({ bug, kind }: { bug: Bug; kind: ItemKind | undefined }) {
   return (
     <>
       <div className="card-title">{bug.title}</div>
@@ -390,6 +398,11 @@ function CardFace({ bug }: { bug: Bug }) {
         {bug.assignee ? (
           <span className={bug.assignee.isBot ? 'pill bot' : 'pill'} title="assignee">
             {bug.assignee.name.split(' ')[0]}
+          </span>
+        ) : null}
+        {kind ? (
+          <span className="kind-emoji" title={kind.label} aria-label={kind.label} role="img">
+            {kind.emoji}
           </span>
         ) : null}
       </div>

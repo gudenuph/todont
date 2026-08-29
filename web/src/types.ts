@@ -6,10 +6,23 @@ export interface BoardColumn {
   terminal?: boolean;
 }
 
+export interface ItemKind {
+  key: string;
+  label: string;
+  emoji: string;
+  /** "a bug", "a feature request" — for the raise menu. */
+  article: string;
+  /** Fields this kind hides, because they make no sense for it. */
+  hiddenFields: string[];
+  /** Kind-specific wording, e.g. severity reads as "Priority" on a request. */
+  labels: Record<string, string>;
+}
+
 export interface Meta {
   columns: BoardColumn[];
   severities: string[];
   environments: string[];
+  kinds: ItemKind[];
   signInProvider: string;
 }
 
@@ -32,6 +45,7 @@ export interface BugCard {
   id: number;
   title: string;
   severity: string;
+  kind: string;
   status: string;
   position: number;
   source: string;

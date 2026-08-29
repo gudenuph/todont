@@ -8,7 +8,7 @@ import fastifyStatic from '@fastify/static';
 
 import { config, isProd } from './config.js';
 import { pruneExpired } from './db.js';
-import { COLUMNS, ENVIRONMENTS, SEVERITIES } from './columns.js';
+import { COLUMNS, ENVIRONMENTS, KINDS, SEVERITIES } from './columns.js';
 import { HttpError, resolveActor } from './auth/identity.js';
 import { authRoutes } from './routes/auth.js';
 import { bugRoutes } from './routes/bugs.js';
@@ -81,6 +81,7 @@ app.get('/api/meta', async () => ({
   columns: COLUMNS,
   severities: SEVERITIES,
   environments: ENVIRONMENTS,
+  kinds: KINDS,
   signInProvider: 'ezmuze central',
 }));
 

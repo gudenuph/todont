@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import Database from 'better-sqlite3';
 import { config } from './config.js';
-import { INTAKE_COLUMN } from './columns.js';
+import { DEFAULT_KIND, INTAKE_COLUMN } from './columns.js';
 
 fs.mkdirSync(config.dataDir, { recursive: true });
 fs.mkdirSync(config.uploadDir, { recursive: true });
@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS bugs (
   expected       TEXT NOT NULL DEFAULT '',
   actual         TEXT NOT NULL DEFAULT '',
   severity       TEXT NOT NULL DEFAULT 'minor',
+  kind           TEXT NOT NULL DEFAULT '${DEFAULT_KIND}',  -- bug | feature
   app_version    TEXT NOT NULL DEFAULT '',
   environment    TEXT NOT NULL DEFAULT '',
   status         TEXT NOT NULL DEFAULT '${INTAKE_COLUMN}',
@@ -110,6 +111,23 @@ CREATE TABLE IF NOT EXISTS api_tokens (
 );
 `);
 
+/**
+ * Additive migrations for databases that already exist — `CREATE TABLE IF NOT
+ * EXISTS` above only shapes a fresh one, so a column added later never reaches
+ * a deployed instance without this.
+ *
+ * Deliberately no CHECK constraint on the added columns: SQLite cannot always
+ * attach one in ALTER TABLE, and a constraint that exists on new databases but
+ * not on migrated ones is worse than validating in one place in the API.
+ */
+function addColumnIfMissing(table: string, column: string, definition: string): void {
+  const existing = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  if (existing.some((c) => c.name === column)) return;
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+}
+
+addColumnIfMissing('bugs', 'kind', `TEXT NOT NULL DEFAULT '${DEFAULT_KIND}'`);
+
 /** Clear out handshakes and sessions nobody finished. */
 export function pruneExpired(): void {
   db.prepare(`DELETE FROM auth_requests WHERE expires_at < datetime('now')`).run();
@@ -134,6 +152,7 @@ export interface BugRow {
   expected: string;
   actual: string;
   severity: string;
+  kind: string;
   app_version: string;
   environment: string;
   status: string;

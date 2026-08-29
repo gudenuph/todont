@@ -4,6 +4,7 @@ import type { BugCard, BugDetail, Meta, Session } from './types';
 import { Board } from './components/Board';
 import { SignIn } from './components/SignIn';
 import { NewBug } from './components/NewBug';
+import { RaiseButton } from './components/RaiseButton';
 import { BugView } from './components/BugView';
 import { Users } from './components/Users';
 
@@ -22,7 +23,7 @@ export function App() {
   const [loading, setLoading] = useState(true);
 
   const [signingIn, setSigningIn] = useState(false);
-  const [raising, setRaising] = useState(false);
+  const [raising, setRaising] = useState<string | null>(null);
   const [showUsers, setShowUsers] = useState(false);
   const [onlyMine, setOnlyMine] = useState(false);
   const [openBug, setOpenBug] = useState<number | null>(bugFromHash());
@@ -161,9 +162,7 @@ export function App() {
               />
               <span>Only my bugs</span>
             </label>
-            <button className="btn primary" onClick={() => setRaising(true)}>
-              Raise a bug
-            </button>
+            <RaiseButton kinds={meta?.kinds ?? []} onRaise={(k) => setRaising(k)} />
             {isAdmin ? (
               <button className="btn ghost" onClick={() => setShowUsers(true)}>
                 Users
@@ -200,6 +199,7 @@ export function App() {
         <Board
           bugs={bugs}
           columns={columns}
+          kinds={meta?.kinds ?? []}
           canManage={canManage}
           onOpen={(id) => openBugById(id)}
           onMove={(id, status, index) => void move(id, status, index)}
@@ -219,11 +219,12 @@ export function App() {
 
       {raising && meta ? (
         <NewBug
+          kind={meta.kinds.find((k) => k.key === raising) ?? meta.kinds[0]}
           severities={meta.severities}
           environments={meta.environments ?? []}
-          onClose={() => setRaising(false)}
+          onClose={() => setRaising(null)}
           onCreated={(bug) => {
-            setRaising(false);
+            setRaising(null);
             setBugs((prev) => [...prev, bug]);
             openBugById(bug.id);
           }}
@@ -237,6 +238,7 @@ export function App() {
           columns={columns}
           severities={meta?.severities ?? []}
           environments={meta?.environments ?? []}
+          kinds={meta?.kinds ?? []}
           onChanged={applyBug}
           onDeleted={(id) => {
             setBugs((prev) => prev.filter((b) => b.id !== id));

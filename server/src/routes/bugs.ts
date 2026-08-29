@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { db, logEvent, type BugRow } from '../db.js';
-import { INTAKE_COLUMN, isSeverity } from '../columns.js';
+import { DEFAULT_KIND, INTAKE_COLUMN, isKind, isSeverity } from '../columns.js';
 import { HttpError, requireActor, requireScope, type Actor } from '../auth/identity.js';
 import {
   deleteBug,
@@ -47,6 +47,7 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
   app.get<{
     Querystring: {
       status?: string;
+      kind?: string;
       q?: string;
       assignee?: string;
       mine?: string;
@@ -62,6 +63,7 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
     return {
       bugs: listBugs({
         status: req.query.status,
+        kind: req.query.kind,
         q: req.query.q,
         assigneeId: assignee !== undefined && assignee !== '' ? Number(assignee) : undefined,
         mineUserId: mine,
@@ -90,6 +92,7 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
       environment?: string;
       externalRef?: string;
       status?: string;
+      kind?: string;
     };
   }>('/api/bugs', async (req, reply) => {
     const actor = requireScope(req, 'write');
@@ -100,6 +103,9 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
 
     const severity = body.severity ?? 'minor';
     if (!isSeverity(severity)) throw new HttpError(400, `Unknown severity "${severity}"`);
+
+    const kind = body.kind ?? DEFAULT_KIND;
+    if (!isKind(kind)) throw new HttpError(400, `Unknown kind "${kind}"`);
 
     const externalRef = text(body.externalRef, 200, 'externalRef') || null;
     if (externalRef) {
@@ -123,9 +129,9 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
     const info = db
       .prepare(
         `INSERT INTO bugs
-           (title, description, steps, expected, actual, severity,
+           (title, description, steps, expected, actual, severity, kind,
             app_version, environment, status, position, reporter_id, source, external_ref)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
       )
       .run(
         title,
@@ -134,6 +140,7 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
         text(body.expected, MAX_BODY, 'Expected result'),
         text(body.actual, MAX_BODY, 'Actual result'),
         severity,
+        kind,
         text(body.appVersion, 100, 'App version'),
         text(body.environment, 500, 'Environment'),
         status,
@@ -183,6 +190,15 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
       if (!isSeverity(body.severity)) throw new HttpError(400, `Unknown severity "${body.severity}"`);
       sets.push('severity = ?');
       params.push(body.severity);
+    }
+
+    // Retyping a ticket — "this is not a bug, it is a request" — is a triage
+    // decision, so it needs manage rather than the looser edit rule.
+    if (body.kind !== undefined) {
+      requireScope(req, 'manage');
+      if (!isKind(body.kind)) throw new HttpError(400, `Unknown kind "${body.kind}"`);
+      sets.push('kind = ?');
+      params.push(body.kind);
     }
 
     if (!sets.length) return { bug: serializeDetail(bug) };

@@ -16,6 +16,24 @@ deploy/  the deploy script and the environment template
 
 ---
 
+## Bugs and feature requests
+
+A feature request is a bug row with `kind: "feature"` — same board, same columns, same
+triage, because the workflow genuinely is the same and a second table would only
+duplicate it. The card carries the type as an emoji in its bottom-right corner: bug or
+feature.
+
+**Raise a bug** in the top bar is a split button; its caret offers the feature request.
+A request hides the fields that make no sense for it — steps to reproduce, expected,
+actual, and the ezmuze version — and rewords the two that stay: "What happened" becomes
+"What you would like", and severity reads as "Priority". Hidden fields are never sent,
+so text typed before switching kind cannot ride along invisibly.
+
+`/api/meta` serves the kinds, their emoji, their hidden fields and their wording, so the
+card, the dialog and the raise menu cannot drift apart. Managers can retype a ticket
+from the dialog — "this is not a bug, it is a request" is a triage decision, so it needs
+`manage` rather than the looser edit rule.
+
 ## The board
 
 Nine columns, left to right. `key` is what the API uses; the label is what people see.
@@ -140,7 +158,7 @@ Everything lands in `unconfirmed` unless the token also has `manage` and passes
 | | |
 |---|---|
 | `GET /api/meta` | columns and severities |
-| `GET /api/bugs?status=&q=&assignee=&mine=&includeMerged=` | the board; `mine=true` needs a signed-in caller |
+| `GET /api/bugs?status=&kind=&q=&assignee=&mine=&includeMerged=` | the board; `mine=true` needs a signed-in caller |
 | `GET /api/bugs/:id` | one bug, with comments, attachments, activity, duplicates |
 | `POST /api/bugs` | raise one — `write` |
 | `PATCH /api/bugs/:id` | edit the text — `write` (reporter while untriaged, else `manage`) |

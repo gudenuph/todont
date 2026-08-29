@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
-import type { BoardColumn, BugDetail, Session, User } from '../types';
+import type { BoardColumn, BugDetail, ItemKind, Session, User } from '../types';
 import { severityColor } from '../severity';
 
 function when(iso: string): string {
@@ -64,6 +64,7 @@ interface Props {
   columns: BoardColumn[];
   severities: string[];
   environments: string[];
+  kinds: ItemKind[];
   onChanged: (bug: BugDetail) => void;
   onDeleted: (id: number) => void;
   onClose: () => void;
@@ -76,6 +77,7 @@ export function BugView({
   columns,
   severities,
   environments,
+  kinds,
   onChanged,
   onDeleted,
   onClose,
@@ -217,12 +219,20 @@ export function BugView({
   }
 
   const column = columns.find((c) => c.key === bug.status);
+  const kind = kinds.find((k) => k.key === bug.kind);
+  const shows = (field: string) => !kind?.hiddenFields.includes(field);
+  const labelFor = (field: string, fallback: string) => kind?.labels[field] ?? fallback;
 
   return (
     <div className="scrim" onClick={onClose}>
       <div className="modal wide" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <span className="id" style={{ color: 'var(--text-faint)' }}>
+            {kind ? (
+              <span className="kind-emoji" title={kind.label} role="img" aria-label={kind.label}>
+                {kind.emoji}
+              </span>
+            ) : null}{' '}
             #{bug.id}
           </span>
           {draft ? (
@@ -281,42 +291,52 @@ export function BugView({
               {draft ? (
                 <div className="edit-form">
                   <Field
-                    label="What happened"
+                    label={labelFor('description', 'What happened')}
                     value={draft.description}
                     rows={4}
                     onChange={(v) => setDraft({ ...draft, description: v })}
                   />
-                  <Field
-                    label="Steps to reproduce"
-                    value={draft.steps}
-                    rows={4}
-                    onChange={(v) => setDraft({ ...draft, steps: v })}
-                  />
-                  <div className="field-row">
+                  {shows('steps') ? (
                     <Field
-                      label="Expected"
-                      value={draft.expected}
-                      rows={3}
-                      onChange={(v) => setDraft({ ...draft, expected: v })}
+                      label="Steps to reproduce"
+                      value={draft.steps}
+                      rows={4}
+                      onChange={(v) => setDraft({ ...draft, steps: v })}
                     />
-                    <Field
-                      label="Actual"
-                      value={draft.actual}
-                      rows={3}
-                      onChange={(v) => setDraft({ ...draft, actual: v })}
-                    />
-                  </div>
-                  <div className="field-row">
-                    <div className="field">
-                      <label htmlFor="bv-version">ezmuze version</label>
-                      <input
-                        id="bv-version"
-                        type="text"
-                        value={draft.appVersion}
-                        placeholder="e.g. 2026.8.1"
-                        onChange={(e) => setDraft({ ...draft, appVersion: e.target.value })}
-                      />
+                  ) : null}
+                  {shows('expected') || shows('actual') ? (
+                    <div className="field-row">
+                      {shows('expected') ? (
+                        <Field
+                          label="Expected"
+                          value={draft.expected}
+                          rows={3}
+                          onChange={(v) => setDraft({ ...draft, expected: v })}
+                        />
+                      ) : null}
+                      {shows('actual') ? (
+                        <Field
+                          label="Actual"
+                          value={draft.actual}
+                          rows={3}
+                          onChange={(v) => setDraft({ ...draft, actual: v })}
+                        />
+                      ) : null}
                     </div>
+                  ) : null}
+                  <div className="field-row">
+                    {shows('appVersion') ? (
+                      <div className="field">
+                        <label htmlFor="bv-version">ezmuze version</label>
+                        <input
+                          id="bv-version"
+                          type="text"
+                          value={draft.appVersion}
+                          placeholder="e.g. 2026.8.1"
+                          onChange={(e) => setDraft({ ...draft, appVersion: e.target.value })}
+                        />
+                      </div>
+                    ) : null}
                     <div className="field">
                       <label htmlFor="bv-env">Where it happened</label>
                       <select
@@ -349,10 +369,10 @@ export function BugView({
                 </div>
               ) : (
                 <>
-                  <Section title="What happened" body={bug.description} />
-                  <Section title="Steps to reproduce" body={bug.steps} />
-                  <Section title="Expected" body={bug.expected} />
-                  <Section title="Actual" body={bug.actual} />
+                  <Section title={labelFor('description', 'What happened')} body={bug.description} />
+                  {shows('steps') ? <Section title="Steps to reproduce" body={bug.steps} /> : null}
+                  {shows('expected') ? <Section title="Expected" body={bug.expected} /> : null}
+                  {shows('actual') ? <Section title="Actual" body={bug.actual} /> : null}
                 </>
               )}
 
@@ -505,7 +525,7 @@ export function BugView({
                 <span style={{ color: column?.color }}>{column?.label ?? bug.status}</span>
               </div>
               <div className="sidebar-row">
-                <span>Severity</span>
+                <span>{labelFor('severity', 'Severity')}</span>
                 <span>
                   <i className="sev-dot" style={{ background: severityColor(bug.severity) }} />
                   {bug.severity}
@@ -523,7 +543,7 @@ export function BugView({
                 <span>Updated</span>
                 <span>{when(bug.updatedAt)}</span>
               </div>
-              {bug.appVersion ? (
+              {bug.appVersion && shows('appVersion') ? (
                 <div className="sidebar-row">
                   <span>Version</span>
                   <span>{bug.appVersion}</span>
@@ -561,7 +581,26 @@ export function BugView({
                   </div>
 
                   <div className="field">
-                    <label htmlFor="bv-severity">Severity</label>
+                    <label htmlFor="bv-kind">Type</label>
+                    <select
+                      id="bv-kind"
+                      value={bug.kind}
+                      disabled={busy}
+                      onChange={(e) =>
+                        void mutate(() => api.updateBug(bug.id, { kind: e.target.value }))
+                      }
+                    >
+                      {kinds.map((k) => (
+                        <option key={k.key} value={k.key}>
+                          {k.emoji} {k.label}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="hint">Retyping hides or reveals the fields above.</div>
+                  </div>
+
+                  <div className="field">
+                    <label htmlFor="bv-severity">{labelFor('severity', 'Severity')}</label>
                     <select
                       id="bv-severity"
                       value={bug.severity}
