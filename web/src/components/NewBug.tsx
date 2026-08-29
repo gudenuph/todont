@@ -14,10 +14,12 @@ interface Staged {
 
 export function NewBug({
   severities,
+  environments,
   onCreated,
   onClose,
 }: {
   severities: string[];
+  environments: string[];
   onCreated: (bug: BugDetail) => void;
   onClose: () => void;
 }) {
@@ -196,14 +198,19 @@ export function NewBug({
           </div>
 
           <div className="field">
-            <label htmlFor="nb-env">Machine / OS</label>
-            <input
+            <label htmlFor="nb-env">Where it happened</label>
+            <select
               id="nb-env"
-              type="text"
               value={environment}
-              placeholder="e.g. Windows 11, desktop DX build"
               onChange={(e) => setEnvironment(e.target.value)}
-            />
+            >
+              <option value="">Not sure / not specified</option>
+              {environments.map((env) => (
+                <option key={env} value={env}>
+                  {env}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="field">

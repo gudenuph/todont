@@ -142,6 +142,8 @@ export interface ListFilters {
   status?: string;
   q?: string;
   assigneeId?: number;
+  /** "My bugs": raised by this user, or waiting on them. */
+  mineUserId?: number;
   includeMerged?: boolean;
   limit?: number;
 }
@@ -161,6 +163,11 @@ export function listBugs(filters: ListFilters = {}) {
   if (filters.assigneeId !== undefined) {
     where.push('b.assignee_id = ?');
     params.push(filters.assigneeId);
+  }
+
+  if (filters.mineUserId !== undefined) {
+    where.push('(b.reporter_id = ? OR b.assignee_id = ?)');
+    params.push(filters.mineUserId, filters.mineUserId);
   }
 
   if (filters.q) {

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { db, logEvent, type BugRow } from '../db.js';
 import { INTAKE_COLUMN, isSeverity } from '../columns.js';
-import { HttpError, requireScope, type Actor } from '../auth/identity.js';
+import { HttpError, requireActor, requireScope, type Actor } from '../auth/identity.js';
 import {
   deleteBug,
   listBugs,
@@ -45,14 +45,26 @@ function assertCanEdit(actor: Actor, bug: BugRow): void {
 export async function bugRoutes(app: FastifyInstance): Promise<void> {
   /** The board. Public — anyone can read, signed in or not. */
   app.get<{
-    Querystring: { status?: string; q?: string; assignee?: string; includeMerged?: string };
+    Querystring: {
+      status?: string;
+      q?: string;
+      assignee?: string;
+      mine?: string;
+      includeMerged?: string;
+    };
   }>('/api/bugs', async (req) => {
     const assignee = req.query.assignee;
+
+    // "Only my bugs" needs to know who is asking, so it is the one filter that
+    // requires a signed-in caller.
+    const mine = req.query.mine === 'true' ? requireActor(req).user.id : undefined;
+
     return {
       bugs: listBugs({
         status: req.query.status,
         q: req.query.q,
         assigneeId: assignee !== undefined && assignee !== '' ? Number(assignee) : undefined,
+        mineUserId: mine,
         includeMerged: req.query.includeMerged === 'true',
       }),
     };

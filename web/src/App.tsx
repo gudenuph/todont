@@ -24,14 +24,15 @@ export function App() {
   const [signingIn, setSigningIn] = useState(false);
   const [raising, setRaising] = useState(false);
   const [showUsers, setShowUsers] = useState(false);
+  const [onlyMine, setOnlyMine] = useState(false);
   const [openBug, setOpenBug] = useState<number | null>(bugFromHash());
 
   const canManage = session.scopes?.includes('manage') ?? false;
   const isAdmin = session.user?.role === 'admin';
 
-  const refresh = useCallback(async (q?: string) => {
+  const refresh = useCallback(async (q?: string, mine?: boolean) => {
     try {
-      const { bugs: list } = await api.bugs({ q: q?.trim() || undefined });
+      const { bugs: list } = await api.bugs({ q: q?.trim() || undefined, mine });
       setBugs(list);
       setError('');
     } catch (err) {
@@ -53,11 +54,11 @@ export function App() {
     })();
   }, [refresh]);
 
-  // Debounced search.
+  // Debounced search; the filter toggle rides the same effect.
   useEffect(() => {
-    const timer = setTimeout(() => void refresh(query), 250);
+    const timer = setTimeout(() => void refresh(query, onlyMine), 250);
     return () => clearTimeout(timer);
-  }, [query, refresh]);
+  }, [query, onlyMine, refresh]);
 
   // Keep the modal and the address bar agreeing, both ways.
   useEffect(() => {
@@ -89,7 +90,7 @@ export function App() {
   /** Merges and moves touch more than one card, so re-read the board. */
   async function refreshQuiet() {
     try {
-      const { bugs: list } = await api.bugs({ q: query.trim() || undefined });
+      const { bugs: list } = await api.bugs({ q: query.trim() || undefined, mine: onlyMine });
       setBugs(list);
     } catch {
       /* the optimistic update stands until the next successful read */
@@ -125,6 +126,8 @@ export function App() {
     await api.signOut().catch(() => undefined);
     setSession({ user: null });
     setShowUsers(false);
+    // "Only my bugs" needs a signed-in caller; leaving it on would 401 the board.
+    setOnlyMine(false);
   }
 
   const columns = useMemo(() => meta?.columns ?? [], [meta]);
@@ -150,6 +153,14 @@ export function App() {
 
         {session.user ? (
           <>
+            <label className="toggle" title="Bugs you raised, or that are assigned to you">
+              <input
+                type="checkbox"
+                checked={onlyMine}
+                onChange={(e) => setOnlyMine(e.target.checked)}
+              />
+              <span>Only my bugs</span>
+            </label>
             <button className="btn primary" onClick={() => setRaising(true)}>
               Raise a bug
             </button>
@@ -209,6 +220,7 @@ export function App() {
       {raising && meta ? (
         <NewBug
           severities={meta.severities}
+          environments={meta.environments ?? []}
           onClose={() => setRaising(false)}
           onCreated={(bug) => {
             setRaising(false);
@@ -224,6 +236,7 @@ export function App() {
           session={session}
           columns={columns}
           severities={meta?.severities ?? []}
+          environments={meta?.environments ?? []}
           onChanged={applyBug}
           onDeleted={(id) => {
             setBugs((prev) => prev.filter((b) => b.id !== id));

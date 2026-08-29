@@ -42,3 +42,22 @@ export type Severity = (typeof SEVERITIES)[number];
 export function isSeverity(v: unknown): v is Severity {
   return typeof v === 'string' && (SEVERITIES as readonly string[]).includes(v);
 }
+
+/**
+ * Where the bug happened. ezmuze studio ships a browser build (Blazor WASM) and
+ * desktop builds, so the browser matters as much as the OS does.
+ *
+ * The UI offers exactly this list. The API deliberately still accepts free text
+ * — ezmuze raises bugs programmatically and knows more about the machine than a
+ * picker can express, and a closed enum would reject that.
+ */
+export const ENVIRONMENTS = [
+  'Web — Chrome',
+  'Web — Edge',
+  'Web — Firefox',
+  'Web — Safari',
+  'Windows (desktop)',
+  'macOS (desktop)',
+  'Linux (desktop)',
+  'Other',
+] as const;

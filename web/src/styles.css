@@ -151,6 +151,28 @@ a {
   color: var(--accent);
 }
 
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--text-dim);
+  cursor: pointer;
+  user-select: none;
+  flex: 0 0 auto;
+}
+
+.toggle input {
+  accent-color: var(--accent);
+  cursor: pointer;
+  margin: 0;
+}
+
+.toggle:hover {
+  color: var(--text);
+}
+
 /* ----------------------------------------------------------------- buttons */
 
 .btn {
@@ -467,6 +489,25 @@ a {
 .close:hover {
   color: var(--text);
   background: var(--raised);
+}
+
+/* The bug dialog in edit mode. */
+.title-edit {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.edit-form .field:last-of-type {
+  margin-bottom: 0;
+}
+
+.edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+  margin-bottom: 18px;
 }
 
 /* ------------------------------------------------------------------- forms */

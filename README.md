@@ -56,6 +56,17 @@ duplicates merged into it back onto their columns, and unlinks its uploaded file
 Severity (`critical`, `major`, `minor`, `trivial`) colours the strip down the left of
 every card, so a board can be read at a glance without opening anything.
 
+**Only my bugs** in the top bar filters the board to what you raised *or* what is
+assigned to you — for a reporter that is their own reports, for a manager it is also
+their queue.
+
+**Where it happened** is a picker, not free text: the browser builds (`Web — Chrome`,
+`Edge`, `Firefox`, `Safari`) and the desktop ones (`Windows`, `macOS`, `Linux`), plus
+`Other`. `/api/meta` serves the list. The API still accepts *any* string here — ezmuze
+raises bugs programmatically and knows more about the machine than a picker can say —
+and the dialog keeps an unrecognised value selectable so saving never silently drops
+it.
+
 Admins promote and demote from the **Users** dialog in the top bar. An admin cannot
 change their own role, and the last admin cannot be demoted — otherwise the instance
 would have nobody able to manage anyone.
@@ -129,7 +140,7 @@ Everything lands in `unconfirmed` unless the token also has `manage` and passes
 | | |
 |---|---|
 | `GET /api/meta` | columns and severities |
-| `GET /api/bugs?status=&q=&assignee=&includeMerged=` | the board |
+| `GET /api/bugs?status=&q=&assignee=&mine=&includeMerged=` | the board; `mine=true` needs a signed-in caller |
 | `GET /api/bugs/:id` | one bug, with comments, attachments, activity, duplicates |
 | `POST /api/bugs` | raise one — `write` |
 | `PATCH /api/bugs/:id` | edit the text — `write` (reporter while untriaged, else `manage`) |

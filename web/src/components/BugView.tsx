@@ -47,11 +47,23 @@ function describeEvent(type: string, detail: string): string {
   }
 }
 
+/** Every field a manager may rewrite, exactly matching what PATCH accepts. */
+interface Draft {
+  title: string;
+  description: string;
+  steps: string;
+  expected: string;
+  actual: string;
+  appVersion: string;
+  environment: string;
+}
+
 interface Props {
   bugId: number;
   session: Session;
   columns: BoardColumn[];
   severities: string[];
+  environments: string[];
   onChanged: (bug: BugDetail) => void;
   onDeleted: (id: number) => void;
   onClose: () => void;
@@ -63,6 +75,7 @@ export function BugView({
   session,
   columns,
   severities,
+  environments,
   onChanged,
   onDeleted,
   onClose,
@@ -73,9 +86,19 @@ export function BugView({
   const [comment, setComment] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [draft, setDraft] = useState<Draft | null>(null);
 
   const canManage = session.scopes?.includes('manage') ?? false;
   const canWrite = session.scopes?.includes('write') ?? false;
+
+  /**
+   * The same rule the server enforces: a manager edits anything, and a reporter
+   * may still fix their own wording while the bug is untriaged.
+   */
+  const intakeKey = columns.find((c) => c.intake)?.key;
+  const canEdit =
+    canManage ||
+    (bug !== null && bug.reporter?.id === session.user?.id && bug.status === intakeKey);
 
   /** Managers can pull anything; everyone else only what they uploaded. */
   const canRemoveAttachment = (uploaderId: number | undefined) =>
@@ -118,6 +141,41 @@ export function BugView({
     } finally {
       setBusy(false);
     }
+  }
+
+  function startEditing() {
+    if (!bug) return;
+    setDraft({
+      title: bug.title,
+      description: bug.description,
+      steps: bug.steps,
+      expected: bug.expected,
+      actual: bug.actual,
+      appVersion: bug.appVersion,
+      environment: bug.environment,
+    });
+  }
+
+  async function saveDraft() {
+    if (!bug || !draft) return;
+    if (!draft.title.trim()) {
+      setError('Title cannot be empty');
+      return;
+    }
+    // Send only what actually changed, so the activity trail stays honest.
+    const changed: Record<string, string> = {};
+    for (const [key, value] of Object.entries(draft)) {
+      if (value !== (bug as unknown as Record<string, string>)[key]) changed[key] = value;
+    }
+    if (!Object.keys(changed).length) {
+      setDraft(null);
+      return;
+    }
+    await mutate(async () => {
+      const result = await api.updateBug(bug.id, changed);
+      setDraft(null);
+      return result;
+    });
   }
 
   /** Deleting a bug leaves nothing to re-render, so it closes the dialog. */
@@ -167,7 +225,22 @@ export function BugView({
           <span className="id" style={{ color: 'var(--text-faint)' }}>
             #{bug.id}
           </span>
-          <h2>{bug.title}</h2>
+          {draft ? (
+            <input
+              className="title-edit"
+              type="text"
+              value={draft.title}
+              aria-label="Title"
+              onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+            />
+          ) : (
+            <h2>{bug.title}</h2>
+          )}
+          {canEdit && !draft ? (
+            <button className="btn small ghost" onClick={startEditing}>
+              Edit
+            </button>
+          ) : null}
           <button className="close" onClick={onClose} aria-label="Close">
             ×
           </button>
@@ -205,10 +278,83 @@ export function BugView({
 
           <div className="detail-grid">
             <div>
-              <Section title="What happened" body={bug.description} />
-              <Section title="Steps to reproduce" body={bug.steps} />
-              <Section title="Expected" body={bug.expected} />
-              <Section title="Actual" body={bug.actual} />
+              {draft ? (
+                <div className="edit-form">
+                  <Field
+                    label="What happened"
+                    value={draft.description}
+                    rows={4}
+                    onChange={(v) => setDraft({ ...draft, description: v })}
+                  />
+                  <Field
+                    label="Steps to reproduce"
+                    value={draft.steps}
+                    rows={4}
+                    onChange={(v) => setDraft({ ...draft, steps: v })}
+                  />
+                  <div className="field-row">
+                    <Field
+                      label="Expected"
+                      value={draft.expected}
+                      rows={3}
+                      onChange={(v) => setDraft({ ...draft, expected: v })}
+                    />
+                    <Field
+                      label="Actual"
+                      value={draft.actual}
+                      rows={3}
+                      onChange={(v) => setDraft({ ...draft, actual: v })}
+                    />
+                  </div>
+                  <div className="field-row">
+                    <div className="field">
+                      <label htmlFor="bv-version">ezmuze version</label>
+                      <input
+                        id="bv-version"
+                        type="text"
+                        value={draft.appVersion}
+                        placeholder="e.g. 2026.8.1"
+                        onChange={(e) => setDraft({ ...draft, appVersion: e.target.value })}
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="bv-env">Where it happened</label>
+                      <select
+                        id="bv-env"
+                        value={draft.environment}
+                        onChange={(e) => setDraft({ ...draft, environment: e.target.value })}
+                      >
+                        <option value="">Not sure / not specified</option>
+                        {environments.map((env) => (
+                          <option key={env} value={env}>
+                            {env}
+                          </option>
+                        ))}
+                        {/* A value from the API that predates this list must
+                            still be selectable, or saving would silently drop it. */}
+                        {draft.environment && !environments.includes(draft.environment) ? (
+                          <option value={draft.environment}>{draft.environment}</option>
+                        ) : null}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="edit-actions">
+                    <button className="btn ghost" disabled={busy} onClick={() => setDraft(null)}>
+                      Cancel
+                    </button>
+                    <button className="btn primary" disabled={busy} onClick={() => void saveDraft()}>
+                      {busy ? 'Saving…' : 'Save changes'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <Section title="What happened" body={bug.description} />
+                  <Section title="Steps to reproduce" body={bug.steps} />
+                  <Section title="Expected" body={bug.expected} />
+                  <Section title="Actual" body={bug.actual} />
+                </>
+              )}
 
               {bug.attachments.length ? (
                 <div className="detail-section">
@@ -385,7 +531,7 @@ export function BugView({
               ) : null}
               {bug.environment ? (
                 <div className="sidebar-row">
-                  <span>Machine</span>
+                  <span>Where</span>
                   <span style={{ textAlign: 'right' }}>{bug.environment}</span>
                 </div>
               ) : null}
@@ -522,6 +668,25 @@ function ConfirmButton({
         Cancel
       </button>
     </span>
+  );
+}
+
+function Field({
+  label,
+  value,
+  rows,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  rows: number;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="field">
+      <label>{label}</label>
+      <textarea rows={rows} value={value} onChange={(e) => onChange(e.target.value)} />
+    </div>
   );
 }
 

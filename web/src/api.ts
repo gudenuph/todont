@@ -55,10 +55,11 @@ export const api = {
     ),
   signOut: () => call<{ ok: true }>('/api/auth/logout', { method: 'POST' }),
 
-  bugs: (params: { q?: string; status?: string } = {}) => {
+  bugs: (params: { q?: string; status?: string; mine?: boolean } = {}) => {
     const qs = new URLSearchParams();
     if (params.q) qs.set('q', params.q);
     if (params.status) qs.set('status', params.status);
+    if (params.mine) qs.set('mine', 'true');
     const suffix = qs.toString() ? `?${qs}` : '';
     return call<{ bugs: BugCard[] }>(`/api/bugs${suffix}`);
   },

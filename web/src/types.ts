@@ -9,6 +9,7 @@ export interface BoardColumn {
 export interface Meta {
   columns: BoardColumn[];
   severities: string[];
+  environments: string[];
   signInProvider: string;
 }
 
