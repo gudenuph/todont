@@ -237,6 +237,12 @@ cannot become the parent of every future crash.
 **Traces are stored already normalised**, so no username or machine path lands on a
 board that anyone can read.
 
+**Only managers and admins can read a trace**, on any ticket — including the person who
+reported it. Everyone else sees that one was attached, which is what tells a reporter
+their crash details arrived. This is enforced in `serializeDetail`, not in the UI: the
+board is world-readable and hiding it client-side would leave it a `curl` away. The
+parameter defaults to *not* visible, so a new call site cannot leak one by forgetting.
+
 `POST /api/bugs` applies the same matching: raising a bug whose trace is already known
 returns the existing ticket with `created: false`, `alreadyRaised: true` and the new
 count, instead of a duplicate. A client that skips the check call and just reports every

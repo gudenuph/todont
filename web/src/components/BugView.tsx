@@ -57,7 +57,7 @@ interface Draft {
   actual: string;
   appVersion: string;
   environment: string;
-  stackTrace: string;
+  stackTrace?: string;
 }
 
 interface Props {
@@ -157,7 +157,9 @@ export function BugView({
       actual: bug.actual,
       appVersion: bug.appVersion,
       environment: bug.environment,
-      stackTrace: bug.stackTrace,
+      // A reporter editing their own bug is served an empty trace, so it must
+      // never enter the draft — saving would otherwise wipe what they cannot see.
+      stackTrace: canManage ? bug.stackTrace : undefined,
     });
   }
 
@@ -170,6 +172,7 @@ export function BugView({
     // Send only what actually changed, so the activity trail stays honest.
     const changed: Record<string, string> = {};
     for (const [key, value] of Object.entries(draft)) {
+      if (value === undefined) continue; // a field this editor cannot see
       if (value !== (bug as unknown as Record<string, string>)[key]) changed[key] = value;
     }
     if (!Object.keys(changed).length) {
@@ -327,14 +330,14 @@ export function BugView({
                       ) : null}
                     </div>
                   ) : null}
-                  {shows('stackTrace') ? (
+                  {shows('stackTrace') && canManage ? (
                     <div className="field">
                       <label htmlFor="bv-stack">Stack trace</label>
                       <textarea
                         id="bv-stack"
                         className="mono"
                         rows={5}
-                        value={draft.stackTrace}
+                        value={draft.stackTrace ?? ''}
                         onChange={(e) => setDraft({ ...draft, stackTrace: e.target.value })}
                       />
                       <div className="hint">
@@ -392,14 +395,22 @@ export function BugView({
                   {shows('steps') ? <Section title="Steps to reproduce" body={bug.steps} /> : null}
                   {shows('expected') ? <Section title="Expected" body={bug.expected} /> : null}
                   {shows('actual') ? <Section title="Actual" body={bug.actual} /> : null}
-                  {shows('stackTrace') && bug.stackTrace ? (
+                  {shows('stackTrace') && bug.hasStackTrace ? (
                     <div className="detail-section">
                       <h3>Stack trace</h3>
-                      <pre className="stack">{bug.stackTrace}</pre>
-                      <div className="hint">
-                        Paths and usernames were generalised before saving; this is what
-                        new reports are matched against.
-                      </div>
+                      {bug.stackTrace ? (
+                        <>
+                          <pre className="stack">{bug.stackTrace}</pre>
+                          <div className="hint">
+                            Paths and usernames were generalised before saving; this is what
+                            new reports are matched against.
+                          </div>
+                        </>
+                      ) : (
+                        <p className="empty" style={{ color: 'var(--text-faint)' }}>
+                          A stack trace was sent with this report. Managers can read it.
+                        </p>
+                      )}
                     </div>
                   ) : null}
                 </>

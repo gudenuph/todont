@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { config } from '../config.js';
 import { db, logEvent } from '../db.js';
-import { HttpError, requireScope, type Actor } from '../auth/identity.js';
+import { HttpError, canSeeStackTrace, requireScope, type Actor } from '../auth/identity.js';
 import { requireBug, serializeDetail } from '../lib/bugs.js';
 import type { BugRow } from '../db.js';
 
@@ -148,7 +148,7 @@ export async function attachmentRoutes(app: FastifyInstance): Promise<void> {
     db.prepare(`UPDATE bugs SET updated_at = datetime('now') WHERE id = ?`).run(bug.id);
     logEvent(bug.id, actor.user.id, 'attachment_added', JSON.stringify({ count: saved.length }));
 
-    return reply.code(201).send({ bug: serializeDetail(requireBug(bug.id)) });
+    return reply.code(201).send({ bug: serializeDetail(requireBug(bug.id), canSeeStackTrace(req)) });
   });
 
   /**
@@ -215,6 +215,6 @@ export async function attachmentRoutes(app: FastifyInstance): Promise<void> {
     await fs.rm(path.join(config.uploadDir, row.filename), { force: true });
     logEvent(row.bug_id, actor.user.id, 'attachment_removed', JSON.stringify({ name: row.original_name }));
 
-    return { bug: serializeDetail(requireBug(row.bug_id)) };
+    return { bug: serializeDetail(requireBug(row.bug_id), canSeeStackTrace(req)) };
   });
 }

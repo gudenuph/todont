@@ -9,7 +9,13 @@ import {
   levelsFor,
   translateLevel,
 } from '../columns.js';
-import { HttpError, requireActor, requireScope, type Actor } from '../auth/identity.js';
+import {
+  HttpError,
+  canSeeStackTrace,
+  requireActor,
+  requireScope,
+  type Actor,
+} from '../auth/identity.js';
 import {
   deleteBug,
   listBugs,
@@ -84,7 +90,7 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get<{ Params: { id: string } }>('/api/bugs/:id', async (req) => {
-    return { bug: serializeDetail(requireBug(bugId(req.params.id))) };
+    return { bug: serializeDetail(requireBug(bugId(req.params.id)), canSeeStackTrace(req)) };
   });
 
   /**
@@ -134,7 +140,7 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
         .get(externalRef) as { id: number } | undefined;
       // Idempotent raise: a caller retrying gets the bug it already created.
       if (existing) {
-        return reply.code(200).send({ bug: serializeDetail(requireBug(existing.id)), created: false });
+        return reply.code(200).send({ bug: serializeDetail(requireBug(existing.id), canSeeStackTrace(req)), created: false });
       }
     }
 
@@ -152,7 +158,7 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
       if (known) {
         const updated = recordOccurrence(known, actor.user.id);
         return reply.code(200).send({
-          bug: serializeDetail(updated),
+          bug: serializeDetail(updated, canSeeStackTrace(req)),
           created: false,
           alreadyRaised: true,
           occurrences: updated.occurrences,
@@ -198,7 +204,7 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
     logEvent(id, actor.user.id, 'created', JSON.stringify({ via: actor.via }));
     moveBug(id, status, undefined, actor.user.id);
 
-    return reply.code(201).send({ bug: serializeDetail(requireBug(id)), created: true });
+    return reply.code(201).send({ bug: serializeDetail(requireBug(id), canSeeStackTrace(req)), created: true });
   });
 
   app.patch<{
@@ -269,14 +275,14 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
       params.push(raw ? normalizeStackTrace(raw) : '', raw ? fingerprintStackTrace(raw) : null);
     }
 
-    if (!sets.length) return { bug: serializeDetail(bug) };
+    if (!sets.length) return { bug: serializeDetail(bug, canSeeStackTrace(req)) };
 
     sets.push(`updated_at = datetime('now')`);
     params.push(bug.id);
     db.prepare(`UPDATE bugs SET ${sets.join(', ')} WHERE id = ?`).run(...params);
 
     logEvent(bug.id, actor.user.id, 'edited', JSON.stringify({ fields: Object.keys(body) }));
-    return { bug: serializeDetail(requireBug(bug.id)) };
+    return { bug: serializeDetail(requireBug(bug.id), canSeeStackTrace(req)) };
   });
 
   /** Drag a card to another column, or reorder it within one. */
@@ -288,7 +294,7 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
       if (!status) throw new HttpError(400, 'status is required');
 
       moveBug(bugId(req.params.id), status, index, actor.user.id);
-      return { bug: serializeDetail(requireBug(bugId(req.params.id))) };
+      return { bug: serializeDetail(requireBug(bugId(req.params.id)), canSeeStackTrace(req)) };
     },
   );
 
@@ -302,15 +308,15 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
 
       const dup = mergeBug(bugId(req.params.id), intoId, actor.user.id);
       return {
-        bug: serializeDetail(dup),
-        into: serializeDetail(requireBug(dup.merged_into_id!)),
+        bug: serializeDetail(dup, canSeeStackTrace(req)),
+        into: serializeDetail(requireBug(dup.merged_into_id!), canSeeStackTrace(req)),
       };
     },
   );
 
   app.post<{ Params: { id: string } }>('/api/bugs/:id/unmerge', async (req) => {
     const actor = requireScope(req, 'manage');
-    return { bug: serializeDetail(unmergeBug(bugId(req.params.id), actor.user.id)) };
+    return { bug: serializeDetail(unmergeBug(bugId(req.params.id), actor.user.id), canSeeStackTrace(req)) };
   });
 
   /** Assign, unassign, or (for a manager) take a bug themselves. */
@@ -336,7 +342,7 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
       );
       logEvent(bug.id, actor.user.id, assignee ? 'assigned' : 'unassigned', JSON.stringify({ assignee }));
 
-      return { bug: serializeDetail(requireBug(bug.id)) };
+      return { bug: serializeDetail(requireBug(bug.id), canSeeStackTrace(req)) };
     },
   );
 
@@ -389,7 +395,7 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
       JSON.stringify({ author: author?.name ?? 'someone' }),
     );
 
-    return { bug: serializeDetail(requireBug(row.bug_id)) };
+    return { bug: serializeDetail(requireBug(row.bug_id), canSeeStackTrace(req)) };
   });
 
   app.post<{ Params: { id: string }; Body: { body?: string } }>(
@@ -408,7 +414,7 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
       );
       db.prepare(`UPDATE bugs SET updated_at = datetime('now') WHERE id = ?`).run(bug.id);
 
-      return reply.code(201).send({ bug: serializeDetail(requireBug(bug.id)) });
+      return reply.code(201).send({ bug: serializeDetail(requireBug(bug.id), canSeeStackTrace(req)) });
     },
   );
 }

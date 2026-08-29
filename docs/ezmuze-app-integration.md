@@ -55,6 +55,9 @@ GUIDs and heap addresses before storing it, and generalises the version inside i
 paths — so the same fault from different users and different releases is recognised as
 one bug. Do not pre-clean it yourself; you will only make traces stop matching.
 
+Traces are only readable by managers and admins once the ticket exists — the reporter
+sees that theirs arrived, not its contents.
+
 ### What to send for `environment`
 
 Use one of these exact strings so reports group properly:

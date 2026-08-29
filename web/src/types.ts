@@ -115,7 +115,9 @@ export interface BugDetail extends BugCard {
   actual: string;
   appVersion: string;
   environment: string;
+  /** Empty unless you can manage — everyone still sees that one exists. */
   stackTrace: string;
+  hasStackTrace: boolean;
   stackFingerprint: string | null;
   attachments: Attachment[];
   comments: Comment[];

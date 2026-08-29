@@ -252,6 +252,11 @@ export function requireScope(req: FastifyRequest, scope: Scope): Actor {
   return actor;
 }
 
+/** Stack traces are manager-and-above, on any ticket. */
+export function canSeeStackTrace(req: FastifyRequest): boolean {
+  return req.actor?.scopes.has('manage') ?? false;
+}
+
 export function publicUser(u: UserRow | null | undefined) {
   if (!u) return null;
   return {

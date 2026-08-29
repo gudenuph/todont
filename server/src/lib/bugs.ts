@@ -79,7 +79,12 @@ interface AttachmentRow {
   created_at: string;
 }
 
-export function serializeDetail(b: BugRow) {
+/**
+ * `canSeeStackTrace` defaults to false so a new call site cannot leak a trace by
+ * forgetting to pass it. Everyone still learns that a trace *exists* — that is
+ * what tells a reporter their crash details arrived.
+ */
+export function serializeDetail(b: BugRow, canSeeStackTrace = false) {
   const counts = db
     .prepare(`SELECT ${COUNTS} FROM bugs b WHERE b.id = ?`)
     .get(b.id) as Pick<CardRow, 'comment_count' | 'attachment_count' | 'duplicate_count'>;
@@ -114,8 +119,11 @@ export function serializeDetail(b: BugRow) {
     actual: b.actual,
     appVersion: b.app_version,
     environment: b.environment,
-    stackTrace: b.stack_trace,
-    stackFingerprint: b.stack_fingerprint,
+    hasStackTrace: b.stack_trace !== '',
+    // Traces name internal types, methods and file layout. They are normalised
+    // of personal data, but the board is world-readable and this is not for it.
+    stackTrace: canSeeStackTrace ? b.stack_trace : '',
+    stackFingerprint: canSeeStackTrace ? b.stack_fingerprint : null,
     attachments: attachments.map((a) => ({
       id: a.id,
       url: `/api/attachments/${a.id}`,

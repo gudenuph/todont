@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { db, logEvent, type BugRow } from '../db.js';
-import { HttpError, requireScope } from '../auth/identity.js';
+import { HttpError, canSeeStackTrace, requireScope } from '../auth/identity.js';
 import { fingerprintStackTrace, normalizeStackTrace } from '../lib/stacktrace.js';
 import { requireBug, resolveCanonical, serializeCard, serializeDetail } from '../lib/bugs.js';
 
@@ -108,7 +108,7 @@ export async function stackTraceRoutes(app: FastifyInstance): Promise<void> {
     async (req) => {
       const existing = findByFingerprint(req.params.fingerprint);
       if (!existing) throw new HttpError(404, 'No bug has that stack trace');
-      return { bug: serializeDetail(existing) };
+      return { bug: serializeDetail(existing, canSeeStackTrace(req)) };
     },
   );
 }
