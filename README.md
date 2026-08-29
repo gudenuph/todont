@@ -247,6 +247,9 @@ from merged duplicates (`×3`), which count people who reported it by hand.
 
 ### Raising a bug from inside ezmuze
 
+> The app-side brief lives in [`docs/ezmuze-app-integration.md`](docs/ezmuze-app-integration.md) —
+> hand that to whoever implements it in ezmuze studio.
+
 The app opens the browser at a report it has already filled in. Two ways in.
 
 **With a stack trace** — POST what you know, open the URL you get back:
