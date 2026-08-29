@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import type { BoardColumn, BugDetail, ItemKind, Session, User } from '../types';
-import { severityColor } from '../severity';
+import { levelColor, levelLabel } from '../severity';
 
 function when(iso: string): string {
   // SQLite hands back "YYYY-MM-DD HH:MM:SS" in UTC with no zone marker.
@@ -62,7 +62,6 @@ interface Props {
   bugId: number;
   session: Session;
   columns: BoardColumn[];
-  severities: string[];
   environments: string[];
   kinds: ItemKind[];
   onChanged: (bug: BugDetail) => void;
@@ -75,7 +74,6 @@ export function BugView({
   bugId,
   session,
   columns,
-  severities,
   environments,
   kinds,
   onChanged,
@@ -525,10 +523,10 @@ export function BugView({
                 <span style={{ color: column?.color }}>{column?.label ?? bug.status}</span>
               </div>
               <div className="sidebar-row">
-                <span>{labelFor('severity', 'Severity')}</span>
-                <span>
-                  <i className="sev-dot" style={{ background: severityColor(bug.severity) }} />
-                  {bug.severity}
+                <span>{labelFor('severityShort', 'Severity')}</span>
+                <span style={{ textAlign: 'right' }}>
+                  <i className="sev-dot" style={{ background: levelColor(kind, bug.severity) }} />
+                  {levelLabel(kind, bug.severity)}
                 </span>
               </div>
               <div className="sidebar-row">
@@ -609,9 +607,9 @@ export function BugView({
                         void mutate(() => api.updateBug(bug.id, { severity: e.target.value }))
                       }
                     >
-                      {severities.map((sv) => (
-                        <option key={sv} value={sv}>
-                          {sv}
+                      {(kind?.levels ?? []).map((level) => (
+                        <option key={level.key} value={level.key}>
+                          {level.label}
                         </option>
                       ))}
                     </select>

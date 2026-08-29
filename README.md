@@ -25,9 +25,21 @@ feature.
 
 **Raise a bug** in the top bar is a split button; its caret offers the feature request.
 A request hides the fields that make no sense for it — steps to reproduce, expected,
-actual, and the ezmuze version — and rewords the two that stay: "What happened" becomes
-"What you would like", and severity reads as "Priority". Hidden fields are never sent,
+actual, and the ezmuze version — and rewords what stays. Hidden fields are sent empty,
 so text typed before switching kind cannot ride along invisibly.
+
+**Each kind has its own scale**, in the same `severity` column, because it answers the
+same question and drives the same colour strip:
+
+| | most pressing → least |
+|---|---|
+| bug | Critical · Major · Minor · Trivial |
+| feature | I can't use ezmuze without this · It would make a big difference · Kinda want it · Just an idea |
+
+The scales are parallel, so **retyping a ticket carries the level across by position** —
+a critical bug becomes a blocking request, not a reset to the default. The API validates
+the level against the ticket's kind and refuses one from the other scale. Levels also
+carry a short form for the card footer, where the full wording will not fit.
 
 `/api/meta` serves the kinds, their emoji, their hidden fields and their wording, so the
 card, the dialog and the raise menu cannot drift apart. Managers can retype a ticket

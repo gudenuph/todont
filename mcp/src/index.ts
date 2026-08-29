@@ -66,7 +66,8 @@ server.registerTool(
   'list_columns',
   {
     title: 'List board columns',
-    description: 'The board’s columns in order, with the key each bug’s status uses.',
+    description:
+      'The board’s columns in order, the ticket kinds (bug, feature request) and each kind’s level scale and wording.',
     inputSchema: {},
   },
   async () => {
@@ -136,7 +137,12 @@ server.registerTool(
       steps: z.string().optional(),
       expected: z.string().optional(),
       actual: z.string().optional(),
-      severity: z.enum(['critical', 'major', 'minor', 'trivial']).optional(),
+      severity: z
+        .string()
+        .optional()
+        .describe(
+          'How much it matters. The scale depends on kind: a bug takes critical | major | \nminor | trivial, a feature request takes blocking | important | want | idea. list_columns \nreturns both.',
+        ),
       appVersion: z.string().optional(),
       environment: z.string().optional(),
       status: z.string().optional(),
@@ -168,7 +174,12 @@ server.registerTool(
       steps: z.string().optional(),
       expected: z.string().optional(),
       actual: z.string().optional(),
-      severity: z.enum(['critical', 'major', 'minor', 'trivial']).optional(),
+      severity: z
+        .string()
+        .optional()
+        .describe(
+          'How much it matters. The scale depends on kind: a bug takes critical | major | \nminor | trivial, a feature request takes blocking | important | want | idea. list_columns \nreturns both.',
+        ),
       kind: z.enum(['bug', 'feature']).optional().describe('Retype the ticket'),
       appVersion: z.string().optional(),
       environment: z.string().optional(),

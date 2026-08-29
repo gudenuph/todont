@@ -220,7 +220,6 @@ export function App() {
       {raising && meta ? (
         <NewBug
           kind={meta.kinds.find((k) => k.key === raising) ?? meta.kinds[0]}
-          severities={meta.severities}
           environments={meta.environments ?? []}
           onClose={() => setRaising(null)}
           onCreated={(bug) => {
@@ -236,7 +235,6 @@ export function App() {
           bugId={openBug}
           session={session}
           columns={columns}
-          severities={meta?.severities ?? []}
           environments={meta?.environments ?? []}
           kinds={meta?.kinds ?? []}
           onChanged={applyBug}

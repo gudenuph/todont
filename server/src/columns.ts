@@ -36,13 +36,6 @@ export function columnLabel(key: string): string {
   return COLUMNS.find((c) => c.key === key)?.label ?? key;
 }
 
-export const SEVERITIES = ['critical', 'major', 'minor', 'trivial'] as const;
-export type Severity = (typeof SEVERITIES)[number];
-
-export function isSeverity(v: unknown): v is Severity {
-  return typeof v === 'string' && (SEVERITIES as readonly string[]).includes(v);
-}
-
 /**
  * Where the bug happened. ezmuze studio ships a browser build (Blazor WASM) and
  * desktop builds, so the browser matters as much as the OS does.
@@ -62,14 +55,6 @@ export const ENVIRONMENTS = [
   'Other',
 ] as const;
 
-/**
- * What kind of thing a ticket is. A feature request is a bug row with this flag
- * — same board, same columns, same triage — because the workflow really is the
- * same and a second table would only duplicate it.
- *
- * The emoji is served rather than hardcoded in the client so the card, the
- * dialog and the raise menu cannot drift apart.
- */
 export interface ItemKind {
   key: string;
   label: string;
@@ -80,6 +65,23 @@ export interface ItemKind {
   hiddenFields: string[];
   /** Kind-specific wording for the fields that are shown. */
   labels: Record<string, string>;
+  /**
+   * How much this one matters, most-pressing first. A bug has a severity; a
+   * feature request has how badly someone wants it — the same slot in the row,
+   * because it answers the same question and drives the same colour strip.
+   * Position is meaningful: retyping a ticket maps the level across by index.
+   */
+  levels: Level[];
+}
+
+/** One step on a kind's scale. The colour is the strip down the left of a card. */
+export interface Level {
+  key: string;
+  /** The full wording, for the picker: "I can't use ezmuze without this". */
+  label: string;
+  /** A card footer is a few characters wide; the full wording will not fit. */
+  short: string;
+  color: string;
 }
 
 export const KINDS: ItemKind[] = [
@@ -89,7 +91,18 @@ export const KINDS: ItemKind[] = [
     emoji: '\u{1F41E}',
     article: 'a bug',
     hiddenFields: [],
-    labels: { description: 'What happened', severity: 'Severity' },
+    labels: {
+      description: 'What happened',
+      severity: 'Severity',
+      severityShort: 'Severity',
+      titlePlaceholder: 'What went wrong, in one line',
+    },
+    levels: [
+      { key: 'critical', label: 'Critical', short: 'Critical', color: '#ff5a5a' },
+      { key: 'major', label: 'Major', short: 'Major', color: '#e68c32' },
+      { key: 'minor', label: 'Minor', short: 'Minor', color: '#6e8ca8' },
+      { key: 'trivial', label: 'Trivial', short: 'Trivial', color: '#4e4e5e' },
+    ],
   },
   {
     key: 'feature',
@@ -98,7 +111,19 @@ export const KINDS: ItemKind[] = [
     article: 'a feature request',
     // Reproduction fields: there is nothing to reproduce.
     hiddenFields: ['steps', 'expected', 'actual', 'appVersion'],
-    labels: { description: 'What you would like', severity: 'Priority' },
+    labels: {
+      description: 'What you would like',
+      severity: 'How much do you want it?',
+      // The sidebar has one narrow column; the full question does not fit.
+      severityShort: 'Wanted',
+      titlePlaceholder: 'What you would like, in one line',
+    },
+    levels: [
+      { key: 'blocking', label: "I can't use ezmuze without this", short: 'Blocking', color: '#ff5a5a' },
+      { key: 'important', label: 'It would make a big difference', short: 'Big deal', color: '#e68c32' },
+      { key: 'want', label: 'Kinda want it', short: 'Kinda want', color: '#6e8ca8' },
+      { key: 'idea', label: 'Just an idea', short: 'Idea', color: '#4e4e5e' },
+    ],
   },
 ];
 
@@ -107,4 +132,37 @@ export const DEFAULT_KIND = 'bug';
 
 export function isKind(value: unknown): value is string {
   return typeof value === 'string' && KIND_KEYS.includes(value);
+}
+
+export function kindOf(key: string): ItemKind | undefined {
+  return KINDS.find((k) => k.key === key);
+}
+
+export function levelsFor(kind: string): Level[] {
+  return kindOf(kind)?.levels ?? [];
+}
+
+/** Every level key across every kind — what the `severity` column may hold. */
+export function isLevelOf(kind: string, level: unknown): level is string {
+  return typeof level === 'string' && levelsFor(kind).some((l) => l.key === level);
+}
+
+/** The middle-ish default: neither "drop everything" nor "barely worth saying". */
+export function defaultLevelFor(kind: string): string {
+  const levels = levelsFor(kind);
+  return levels[Math.min(2, levels.length - 1)]?.key ?? '';
+}
+
+/**
+ * Carry a level across when a ticket is retyped. The scales are parallel and
+ * ordered the same way, so position survives even though no key does: a major
+ * bug becomes a request that would make a big difference, not a reset to the
+ * default.
+ */
+export function translateLevel(fromKind: string, toKind: string, level: string): string {
+  const from = levelsFor(fromKind);
+  const to = levelsFor(toKind);
+  const index = from.findIndex((l) => l.key === level);
+  if (index < 0) return defaultLevelFor(toKind);
+  return to[Math.min(index, to.length - 1)]?.key ?? defaultLevelFor(toKind);
 }

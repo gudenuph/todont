@@ -8,7 +8,7 @@ import fastifyStatic from '@fastify/static';
 
 import { config, isProd } from './config.js';
 import { pruneExpired } from './db.js';
-import { COLUMNS, ENVIRONMENTS, KINDS, SEVERITIES } from './columns.js';
+import { COLUMNS, ENVIRONMENTS, KINDS } from './columns.js';
 import { HttpError, resolveActor } from './auth/identity.js';
 import { authRoutes } from './routes/auth.js';
 import { bugRoutes } from './routes/bugs.js';
@@ -79,8 +79,9 @@ app.setErrorHandler((err: Error & { statusCode?: number }, req, reply) => {
 /** Board shape, so the client never hardcodes the column list. */
 app.get('/api/meta', async () => ({
   columns: COLUMNS,
-  severities: SEVERITIES,
   environments: ENVIRONMENTS,
+  // Each kind carries its own scale, wording and hidden fields, so the card,
+  // the dialog and the raise menu all read from one place.
   kinds: KINDS,
   signInProvider: 'ezmuze central',
 }));

@@ -6,6 +6,15 @@ export interface BoardColumn {
   terminal?: boolean;
 }
 
+export interface Level {
+  key: string;
+  label: string;
+  /** Card-footer wording; the full label is for pickers. */
+  short: string;
+  /** Colour of the strip down the left of a card at this level. */
+  color: string;
+}
+
 export interface ItemKind {
   key: string;
   label: string;
@@ -14,13 +23,14 @@ export interface ItemKind {
   article: string;
   /** Fields this kind hides, because they make no sense for it. */
   hiddenFields: string[];
-  /** Kind-specific wording, e.g. severity reads as "Priority" on a request. */
+  /** Kind-specific wording, e.g. how the scale is asked about. */
   labels: Record<string, string>;
+  /** This kind's scale, most pressing first. */
+  levels: Level[];
 }
 
 export interface Meta {
   columns: BoardColumn[];
-  severities: string[];
   environments: string[];
   kinds: ItemKind[];
   signInProvider: string;

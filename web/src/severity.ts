@@ -1,15 +1,29 @@
-/**
- * The strip down the left of every card. Severity is the one thing you should
- * be able to read off a board without opening anything, so it gets colour and
- * position rather than a word buried in the card's footer.
- */
-export const SEVERITY_COLOR: Record<string, string> = {
-  critical: '#ff5a5a', // AccentPlayhead — the only true red in the palette
-  major: '#e68c32', // AccentWarning
-  minor: '#6e8ca8', // muted slate
-  trivial: '#4e4e5e', // barely there, but still distinct from the card border
-};
+import type { ItemKind, Level } from './types';
 
-export function severityColor(severity: string): string {
-  return SEVERITY_COLOR[severity] ?? SEVERITY_COLOR.trivial;
+/**
+ * A ticket's level lives in one column but means different things per kind: a
+ * bug has a severity, a feature request has how badly someone wants it. The
+ * scales come from /api/meta so the card, the form and the dialog agree.
+ */
+export function levelsOf(kind: ItemKind | undefined): Level[] {
+  return kind?.levels ?? [];
+}
+
+export function levelOf(kind: ItemKind | undefined, key: string): Level | undefined {
+  return kind?.levels.find((l) => l.key === key);
+}
+
+/** The strip down the left of a card. Falls back to the card border colour. */
+export function levelColor(kind: ItemKind | undefined, key: string): string {
+  return levelOf(kind, key)?.color ?? '#3c3c4a';
+}
+
+/** What to show the reader — "Major", "Kinda want it" — not the stored key. */
+export function levelLabel(kind: ItemKind | undefined, key: string): string {
+  return levelOf(kind, key)?.label ?? key;
+}
+
+/** The card-footer form, which has only a few characters to play with. */
+export function levelShort(kind: ItemKind | undefined, key: string): string {
+  return levelOf(kind, key)?.short ?? levelLabel(kind, key);
 }

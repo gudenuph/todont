@@ -1,6 +1,14 @@
 import type { FastifyInstance } from 'fastify';
 import { db, logEvent, type BugRow } from '../db.js';
-import { DEFAULT_KIND, INTAKE_COLUMN, isKind, isSeverity } from '../columns.js';
+import {
+  DEFAULT_KIND,
+  INTAKE_COLUMN,
+  defaultLevelFor,
+  isKind,
+  isLevelOf,
+  levelsFor,
+  translateLevel,
+} from '../columns.js';
 import { HttpError, requireActor, requireScope, type Actor } from '../auth/identity.js';
 import {
   deleteBug,
@@ -101,11 +109,19 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
     const title = text(body.title, MAX_TITLE, 'Title');
     if (!title) throw new HttpError(400, 'Title is required');
 
-    const severity = body.severity ?? 'minor';
-    if (!isSeverity(severity)) throw new HttpError(400, `Unknown severity "${severity}"`);
-
     const kind = body.kind ?? DEFAULT_KIND;
     if (!isKind(kind)) throw new HttpError(400, `Unknown kind "${kind}"`);
+
+    const severity = body.severity ?? defaultLevelFor(kind);
+    if (!isLevelOf(kind, severity)) {
+      throw new HttpError(
+        400,
+        `"${severity}" is not a level for a ${kind} — expected one of ` +
+          levelsFor(kind)
+            .map((l) => l.key)
+            .join(', '),
+      );
+    }
 
     const externalRef = text(body.externalRef, 200, 'externalRef') || null;
     if (externalRef) {
@@ -186,19 +202,36 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
       params.push(value);
     }
 
-    if (body.severity !== undefined) {
-      if (!isSeverity(body.severity)) throw new HttpError(400, `Unknown severity "${body.severity}"`);
-      sets.push('severity = ?');
-      params.push(body.severity);
-    }
-
     // Retyping a ticket — "this is not a bug, it is a request" — is a triage
     // decision, so it needs manage rather than the looser edit rule.
-    if (body.kind !== undefined) {
+    let kind = bug.kind;
+    if (body.kind !== undefined && body.kind !== bug.kind) {
       requireScope(req, 'manage');
       if (!isKind(body.kind)) throw new HttpError(400, `Unknown kind "${body.kind}"`);
+      kind = body.kind;
       sets.push('kind = ?');
-      params.push(body.kind);
+      params.push(kind);
+
+      // The scales are parallel but share no keys, so a level that is not
+      // being set explicitly has to be carried across by position.
+      if (body.severity === undefined) {
+        sets.push('severity = ?');
+        params.push(translateLevel(bug.kind, kind, bug.severity));
+      }
+    }
+
+    if (body.severity !== undefined) {
+      if (!isLevelOf(kind, body.severity)) {
+        throw new HttpError(
+          400,
+          `"${String(body.severity)}" is not a level for a ${kind} — expected one of ` +
+            levelsFor(kind)
+              .map((l) => l.key)
+              .join(', '),
+        );
+      }
+      sets.push('severity = ?');
+      params.push(body.severity);
     }
 
     if (!sets.length) return { bug: serializeDetail(bug) };

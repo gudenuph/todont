@@ -14,13 +14,11 @@ interface Staged {
 
 export function NewBug({
   kind,
-  severities,
   environments,
   onCreated,
   onClose,
 }: {
   kind: ItemKind;
-  severities: string[];
   environments: string[];
   onCreated: (bug: BugDetail) => void;
   onClose: () => void;
@@ -33,7 +31,10 @@ export function NewBug({
   const [steps, setSteps] = useState('');
   const [expected, setExpected] = useState('');
   const [actual, setActual] = useState('');
-  const [severity, setSeverity] = useState('minor');
+  const [severity, setSeverity] = useState(
+    // The middle of this kind's scale, not a key from another one.
+    kind.levels[Math.min(2, kind.levels.length - 1)]?.key ?? '',
+  );
   const [appVersion, setAppVersion] = useState('');
   const [environment, setEnvironment] = useState('');
   const [files, setFiles] = useState<Staged[]>([]);
@@ -139,7 +140,7 @@ export function NewBug({
               type="text"
               value={title}
               autoFocus
-              placeholder="What went wrong, in one line"
+              placeholder={labelFor('titlePlaceholder', 'What went wrong, in one line')}
               onChange={(e) => setTitle(e.target.value)}
             />
           </div>
@@ -202,9 +203,9 @@ export function NewBug({
             <div className="field">
               <label htmlFor="nb-sev">{labelFor('severity', 'Severity')}</label>
               <select id="nb-sev" value={severity} onChange={(e) => setSeverity(e.target.value)}>
-                {severities.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
+                {kind.levels.map((level) => (
+                  <option key={level.key} value={level.key}>
+                    {level.label}
                   </option>
                 ))}
               </select>

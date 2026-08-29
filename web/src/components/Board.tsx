@@ -14,7 +14,7 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core';
 import type { BoardColumn, BugCard as Bug, ItemKind } from '../types';
-import { severityColor } from '../severity';
+import { levelColor, levelShort } from '../severity';
 
 /** How much of a card's height (top and bottom) counts as "between cards". */
 const EDGE_BAND = 0.3;
@@ -227,7 +227,9 @@ export function Board({ bugs, columns, kinds, canManage, onOpen, onMove, onMerge
         {active ? (
           <div
             className="card"
-            style={{ '--sev-color': severityColor(active.severity) } as React.CSSProperties}
+            style={
+              { '--sev-color': levelColor(kindOf(active.kind), active.severity) } as React.CSSProperties
+            }
           >
             <CardFace bug={active} kind={kindOf(active.kind)} />
           </div>
@@ -361,7 +363,7 @@ function DraggableCard({
       ref={setRef}
       data-card={bug.id}
       className={`card${draggable.isDragging ? ' dragging' : ''}${isMergeTarget ? ' merge-target' : ''}`}
-      style={{ '--sev-color': severityColor(bug.severity) } as React.CSSProperties}
+      style={{ '--sev-color': levelColor(kind, bug.severity) } as React.CSSProperties}
       onClick={() => onOpen(bug.id)}
       {...(canManage ? draggable.listeners : {})}
       {...(canManage ? draggable.attributes : {})}
@@ -386,7 +388,7 @@ function CardFace({ bug, kind }: { bug: Bug; kind: ItemKind | undefined }) {
       <div className="card-title">{bug.title}</div>
       <div className="card-meta">
         <span className="id">#{bug.id}</span>
-        <span>{bug.severity}</span>
+        <span>{levelShort(kind, bug.severity)}</span>
         <span className="grow" />
         {bug.duplicateCount > 0 ? (
           <span className="pill dup" title={`${bug.duplicateCount} merged duplicate(s)`}>
