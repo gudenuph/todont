@@ -56,7 +56,7 @@ Nine columns, left to right. `key` is what the API uses; the label is what peopl
 | `confirmed` | Confirmed | |
 | `backlog` | Backlog | |
 | `current-focus` | Current focus | |
-| `in-progress` | In progress | |
+| `in-progress` | In release queue | renamed for readers; the key is unchanged |
 | `in-beta-testing` | In beta testing | |
 | `shipped` | Shipped | |
 | `on-hold` | On hold | |

@@ -18,7 +18,8 @@ export const COLUMNS: BoardColumn[] = [
   { key: 'confirmed', label: 'Confirmed', color: '#e68c32' },
   { key: 'backlog', label: 'Backlog', color: '#b07cff' },
   { key: 'current-focus', label: 'Current focus', color: '#ff6f9c' },
-  { key: 'in-progress', label: 'In progress', color: '#35c7e8' },
+  // Renamed for readers only — the key is what every bug row stores.
+  { key: 'in-progress', label: 'In release queue', color: '#35c7e8' },
   { key: 'in-beta-testing', label: 'In beta testing', color: '#96c8ff' },
   { key: 'shipped', label: 'Shipped', color: '#60e0a0', terminal: true },
   { key: 'on-hold', label: 'On hold', color: '#6e8ca8', terminal: true },

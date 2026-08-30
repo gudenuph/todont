@@ -19,7 +19,12 @@ function when(iso: string): string {
   return Number.isNaN(date.getTime()) ? iso : date.toLocaleString();
 }
 
-function describeEvent(type: string, detail: string): string {
+/**
+ * `label` turns a stored column key into what people actually see. Column names
+ * are display-only and can be renamed at any time; the trail would otherwise
+ * still be quoting keys nobody recognises.
+ */
+function describeEvent(type: string, detail: string, label: (key: string) => string): string {
   let data: Record<string, unknown> = {};
   try {
     data = JSON.parse(detail) as Record<string, unknown>;
@@ -31,7 +36,7 @@ function describeEvent(type: string, detail: string): string {
     case 'created':
       return `raised this${data.via === 'token' ? ' via the API' : ''}`;
     case 'status_changed':
-      return `moved it from ${String(data.from)} to ${String(data.to)}`;
+      return `moved it from ${label(String(data.from))} to ${label(String(data.to))}`;
     case 'merged':
       return `merged this into #${String(data.into)}`;
     case 'unmerged':
@@ -248,6 +253,7 @@ export function BugView({
   }
 
   const column = columns.find((c) => c.key === bug.status);
+  const columnLabel = (key: string) => columns.find((c) => c.key === key)?.label ?? key;
   const kind = kinds.find((k) => k.key === bug.kind);
   const shows = (field: string) => !kind?.hiddenFields.includes(field);
   const labelFor = (field: string, fallback: string) => kind?.labels[field] ?? fallback;
@@ -665,7 +671,7 @@ export function BugView({
                   {bug.events.map((e) => (
                     <div key={e.id}>
                       <b style={{ color: 'var(--text-dim)' }}>{e.actor?.name ?? 'someone'}</b>{' '}
-                      {describeEvent(e.type, e.detail)} · {when(e.createdAt)}
+                      {describeEvent(e.type, e.detail, columnLabel)} · {when(e.createdAt)}
                     </div>
                   ))}
                 </div>
