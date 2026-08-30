@@ -48,44 +48,120 @@ function scopesForRole(role: UserRow['role']): Set<Scope> {
   }
 }
 
-/**
- * Find or create the local user behind an ezmuze central account.
- *
- * Role bootstrap: ids listed in ADMIN_EZMUZE_USER_IDS are always admin. Failing
- * that, if the instance has no admin at all, the first person through the door
- * becomes one — the usual self-hosted bootstrap, and the deploy README says to
- * sign in immediately after standing the site up.
- */
-export function upsertEzmuzeUser(ezmuzeUserId: string, name: string): UserRow {
-  const id = ezmuzeUserId.toLowerCase();
-  const existing = db
-    .prepare(`SELECT * FROM users WHERE ezmuze_user_id = ?`)
-    .get(id) as UserRow | undefined;
+export function userById(id: number): UserRow | undefined {
+  return db.prepare(`SELECT * FROM users WHERE id = ?`).get(id) as UserRow | undefined;
+}
 
-  const configuredAdmin = config.adminEzmuzeUserIds.includes(id);
+export function userByEmail(email: string): UserRow | undefined {
+  return db.prepare(`SELECT * FROM users WHERE email = ?`).get(email.toLowerCase()) as
+    | UserRow
+    | undefined;
+}
+
+export function userByIdentity(provider: string, subject: string): UserRow | undefined {
+  return db
+    .prepare(
+      `SELECT u.* FROM identities i JOIN users u ON u.id = i.user_id
+       WHERE i.provider = ? AND i.subject = ?`,
+    )
+    .get(provider, subject.toLowerCase()) as UserRow | undefined;
+}
+
+/**
+ * Should this account be an admin?
+ *
+ * Two ways in. An instance can name them up front — by email, or by ezmuze
+ * central id — which survives a database reset. Failing that, the very first
+ * account created becomes admin, because a fresh install with nobody able to
+ * administer it is useless. Every later account is an ordinary user.
+ */
+function roleForNewAccount(email: string | null, ezmuzeUserId: string | null): UserRow['role'] {
+  if (email && config.adminEmails.includes(email)) return 'admin';
+  if (ezmuzeUserId && config.adminEzmuzeUserIds.includes(ezmuzeUserId)) return 'admin';
+
+  const anyUser = (
+    db.prepare(`SELECT COUNT(*) AS n FROM users WHERE is_bot = 0`).get() as { n: number }
+  ).n;
+  return anyUser === 0 ? 'admin' : 'user';
+}
+
+export function markSeen(userId: number): void {
+  db.prepare(`UPDATE users SET last_seen_at = datetime('now') WHERE id = ?`).run(userId);
+}
+
+/**
+ * Find or create the account behind a federated sign-in, and remember the
+ * identity that produced it.
+ *
+ * Matching is on the identity, never on the display name — two people called
+ * "james" are two people. An email is only attached when the provider gives us
+ * one and nobody else already holds it, so a federated login can never take
+ * over an existing local account.
+ */
+export function upsertFederatedUser(
+  provider: string,
+  subject: string,
+  name: string,
+  email: string | null = null,
+): UserRow {
+  const id = subject.toLowerCase();
+  const existing = userByIdentity(provider, id);
 
   if (existing) {
-    const role = configuredAdmin && existing.role !== 'admin' ? 'admin' : existing.role;
+    const promoted =
+      (email && config.adminEmails.includes(email)) ||
+      config.adminEzmuzeUserIds.includes(id);
+    const role = promoted && existing.role !== 'admin' ? 'admin' : existing.role;
     db.prepare(
       `UPDATE users SET name = ?, role = ?, last_seen_at = datetime('now') WHERE id = ?`,
     ).run(name, role, existing.id);
-    return db.prepare(`SELECT * FROM users WHERE id = ?`).get(existing.id) as UserRow;
+    return userById(existing.id)!;
   }
 
-  const adminCount = (
-    db.prepare(`SELECT COUNT(*) AS n FROM users WHERE role = 'admin'`).get() as { n: number }
-  ).n;
+  const free = email && !userByEmail(email) ? email : null;
+  const role = roleForNewAccount(free, provider === 'ezmuze' ? id : null);
 
-  const role: UserRow['role'] = configuredAdmin || adminCount === 0 ? 'admin' : 'user';
+  const create = db.transaction(() => {
+    const info = db
+      .prepare(
+        `INSERT INTO users (ezmuze_user_id, email, name, role, last_seen_at)
+         VALUES (?, ?, ?, ?, datetime('now'))`,
+      )
+      .run(provider === 'ezmuze' ? id : null, free, name, role);
 
-  const info = db
-    .prepare(
-      `INSERT INTO users (ezmuze_user_id, name, role, last_seen_at)
-       VALUES (?, ?, ?, datetime('now'))`,
-    )
-    .run(id, name, role);
+    const userId = Number(info.lastInsertRowid);
+    db.prepare(`INSERT INTO identities (provider, subject, user_id) VALUES (?, ?, ?)`).run(
+      provider,
+      id,
+      userId,
+    );
+    return userId;
+  });
 
-  return db.prepare(`SELECT * FROM users WHERE id = ?`).get(info.lastInsertRowid) as UserRow;
+  return userById(create())!;
+}
+
+/** Create an account that signs in with a password held here. */
+export function createLocalUser(email: string, name: string, passwordHash: string): UserRow {
+  const role = roleForNewAccount(email, null);
+
+  const create = db.transaction(() => {
+    const info = db
+      .prepare(
+        `INSERT INTO users (email, password_hash, name, role, last_seen_at)
+         VALUES (?, ?, ?, ?, datetime('now'))`,
+      )
+      .run(email, passwordHash, name, role);
+
+    const userId = Number(info.lastInsertRowid);
+    db.prepare(`INSERT INTO identities (provider, subject, user_id) VALUES ('local', ?, ?)`).run(
+      email,
+      userId,
+    );
+    return userId;
+  });
+
+  return userById(create())!;
 }
 
 export function createSession(userId: number, authKey: string | null): string {
@@ -194,6 +270,8 @@ function actorFromToken(req: FastifyRequest): Actor | null {
   const user: UserRow = {
     id: row.id,
     ezmuze_user_id: row.ezmuze_user_id,
+    email: row.email,
+    password_hash: row.password_hash,
     name: row.name,
     role: row.role,
     is_bot: row.is_bot,
@@ -265,4 +343,13 @@ export function publicUser(u: UserRow | null | undefined) {
     role: u.role,
     isBot: u.is_bot === 1,
   };
+}
+
+/** Which ways in this instance offers, for the sign-in dialog to render. */
+export function enabledProviders(): string[] {
+  return config.authProviders.filter((p) => p === 'local' || p === 'ezmuze');
+}
+
+export function providerEnabled(provider: string): boolean {
+  return enabledProviders().includes(provider);
 }

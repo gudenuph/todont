@@ -170,6 +170,11 @@ export interface Prefill {
   stackTrace?: string;
 }
 
+export interface AuthOptions {
+  providers: string[];
+  allowSignup: boolean;
+}
+
 export interface Session {
   user: User | null;
   scopes?: string[];

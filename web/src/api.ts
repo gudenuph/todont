@@ -1,5 +1,6 @@
 import type {
   AdminColumn,
+  AuthOptions,
   AdminUser,
   BoardSettings,
   BugCard,
@@ -56,6 +57,20 @@ export const api = {
   draft: (id: string) =>
     call<{ draft: Prefill; knownBug: BugCard | null }>(`/api/drafts/${encodeURIComponent(id)}`),
   me: () => call<Session>('/api/me'),
+
+  authOptions: () => call<AuthOptions>('/api/auth/providers'),
+
+  signup: (data: { email: string; password: string; name?: string }) =>
+    call<{ user: User }>('/api/auth/signup', { method: 'POST', body: json(data) }),
+
+  login: (data: { email: string; password: string }) =>
+    call<{ user: User }>('/api/auth/login', { method: 'POST', body: json(data) }),
+
+  changePassword: (currentPassword: string, newPassword: string) =>
+    call<{ ok: true }>('/api/auth/password', {
+      method: 'POST',
+      body: json({ currentPassword, newPassword }),
+    }),
 
   beginSignIn: () =>
     call<{ requestId: string; approvalUrl: string; expiresInSeconds: number }>(

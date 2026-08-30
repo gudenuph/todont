@@ -42,6 +42,12 @@ WEB_DIST=/app/web/dist
 COOKIE_SECRET=\$SECRET
 COOKIE_SECURE=true
 SESSION_DAYS=30
+# Ways in, in the order the sign-in dialog offers them.
+#   local  = email and password held in this database
+#   ezmuze = the ezmuze central handshake
+AUTH_PROVIDERS=local
+ALLOW_SIGNUP=true
+ADMIN_EMAILS=
 ADMIN_EZMUZE_USER_IDS=
 MAX_UPLOAD_BYTES=52428800
 MAX_UPLOADS_PER_BUG=10

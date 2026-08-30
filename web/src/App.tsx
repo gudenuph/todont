@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from './api';
-import type { BugCard, BugDetail, Meta, Prefill, Session } from './types';
+import type { AuthOptions, BugCard, BugDetail, Meta, Prefill, Session } from './types';
 import { Board } from './components/Board';
 import { SignIn } from './components/SignIn';
 import { NewBug } from './components/NewBug';
@@ -54,6 +54,7 @@ function bugFromHash(): number | null {
 export function App() {
   const [meta, setMeta] = useState<Meta | null>(null);
   const [session, setSession] = useState<Session>({ user: null });
+  const [auth, setAuth] = useState<AuthOptions>({ providers: ['local'], allowSignup: true });
   const [bugs, setBugs] = useState<BugCard[]>([]);
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
@@ -81,9 +82,14 @@ export function App() {
   useEffect(() => {
     void (async () => {
       try {
-        const [loadedMeta, loadedSession] = await Promise.all([api.meta(), api.me()]);
+        const [loadedMeta, loadedSession, loadedAuth] = await Promise.all([
+          api.meta(),
+          api.me(),
+          api.authOptions(),
+        ]);
         setMeta(loadedMeta);
         setSession(loadedSession);
+        setAuth(loadedAuth);
         if (loadedMeta.board?.name) document.title = loadedMeta.board.name;
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Could not reach the tracker');
@@ -284,7 +290,8 @@ export function App() {
           </>
         ) : (
           <button className="btn primary" onClick={() => setSigningIn(true)}>
-            Sign in with ezmuze
+            {/* Which provider is on is an instance setting, so do not name one. */}
+            Sign in
           </button>
         )}
       </header>
@@ -318,6 +325,7 @@ export function App() {
       */}
       {signingIn || (raising && !session.user) ? (
         <SignIn
+          auth={auth}
           reason={
             raising && !session.user
               ? 'ezmuze started a report for you. Sign in and it will be waiting, already filled in.'

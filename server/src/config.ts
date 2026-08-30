@@ -27,6 +27,26 @@ export const config = {
   cookieSecure: env('COOKIE_SECURE', 'false') === 'true',
   sessionDays: Number(env('SESSION_DAYS', '30')),
 
+  /**
+   * Which ways in this instance offers, in the order the sign-in dialog shows
+   * them. `local` is email and password held here; `ezmuze` is the ezmuze
+   * central handshake. An instance that lists neither cannot be signed into,
+   * so an empty value falls back to local.
+   */
+  authProviders: (env('AUTH_PROVIDERS', 'local') || 'local')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean),
+
+  /** Whether strangers may create their own account. */
+  allowSignup: env('ALLOW_SIGNUP', 'true') !== 'false',
+
+  /** Email addresses that are always admin, comma separated. */
+  adminEmails: env('ADMIN_EMAILS', '')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean),
+
   /** ezmuze central. Constants, not settings — see ezmuze-studio docs/services-design.md §2. */
   central: {
     api: 'https://api.ezmuze.co.uk/',

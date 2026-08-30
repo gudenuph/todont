@@ -129,8 +129,30 @@ ezmuze user id into `ADMIN_EZMUZE_USER_IDS` so the role survives a database rese
 
 ## Signing in
 
-There is no password on this site. It uses ezmuze central's **app-connect handshake** —
-the same one ezmuze studio performs (`ezmuze-studio/docs/services-design.md` §2.1):
+An instance chooses its ways in with `AUTH_PROVIDERS`, and the sign-in dialog offers
+whatever is listed, in that order.
+
+### `local` — email and password (the default)
+
+Accounts live in this database. Passwords are hashed with **scrypt** from Node's own
+crypto — deliberately not bcrypt or argon2, both of which are native modules, and this
+project has already worked around native-build friction once. The parameters travel
+inside the stored hash, so they can be raised later without invalidating anyone.
+
+- `ALLOW_SIGNUP=false` closes registration; existing accounts still sign in.
+- `ADMIN_EMAILS` names accounts that are always admin.
+- Login answers with **one message for every failure**, so it cannot be used to find out
+  who has an account, and it hashes even for an unknown address so a miss is not
+  obviously faster to probe. It is rate limited to 20 attempts per 15 minutes.
+- **There is no verification email**, because an instance is not assumed to have anywhere
+  to send from. An address identifies a person; it is not a proven channel and nothing
+  should be trusted because of it.
+- `POST /api/auth/password` changes your own, and needs the current one. Other sessions
+  survive it — signing yourself out of your phone for changing a password is rude.
+
+### `ezmuze` — the app-connect handshake
+
+The one ezmuze studio performs (`ezmuze-studio/docs/services-design.md` §2.1):
 
 1. The server calls `POST https://api.ezmuze.co.uk/Auth/AppConnectRequest` and gets a
    connection id back.
@@ -141,6 +163,17 @@ the same one ezmuze studio performs (`ezmuze-studio/docs/services-design.md` §2
 The handshake runs server-side for two reasons: `api.ezmuze.co.uk` sends no CORS
 headers so the browser cannot call it at all, and it keeps the `AuthKey` out of the
 page. The legacy username+password `PUT /Auth` endpoint is deliberately not used.
+
+### Adding another
+
+A login is a row in `identities` — `(provider, subject, user_id)` — so an account can
+gain a second way in without the others knowing. A new provider needs a route that
+proves who someone is and then calls `upsertFederatedUser(provider, subject, name,
+email?)`; nothing else in the codebase asks how anyone signed in.
+
+Matching is on the identity, never on a display name. An email is attached only when the
+provider supplies one **and** nobody already holds it, so a federated login can never
+take over an existing local account.
 
 ---
 

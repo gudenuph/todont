@@ -24,6 +24,17 @@ CREATE TABLE IF NOT EXISTS users (
   last_seen_at      TEXT
 );
 
+-- How a person proves who they are. One row per login method, so an account
+-- can gain a second one later without the others knowing.
+CREATE TABLE IF NOT EXISTS identities (
+  provider    TEXT NOT NULL,          -- 'local' | 'ezmuze' | ...
+  subject     TEXT NOT NULL,          -- the email, the central user id, ...
+  user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (provider, subject)
+);
+CREATE INDEX IF NOT EXISTS idx_identities_user ON identities(user_id);
+
 CREATE TABLE IF NOT EXISTS sessions (
   id            TEXT PRIMARY KEY,
   user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -183,6 +194,23 @@ function addColumnIfMissing(table: string, column: string, definition: string): 
 }
 
 addColumnIfMissing('bugs', 'kind', `TEXT NOT NULL DEFAULT '${DEFAULT_KIND}'`);
+addColumnIfMissing('users', 'email', `TEXT`);
+addColumnIfMissing('users', 'password_hash', `TEXT`);
+
+// Emails identify local accounts, but bots and federated users have none, so
+// the constraint has to skip nulls — which a plain UNIQUE column would not.
+db.exec(
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL`,
+);
+
+/**
+ * Accounts that predate the identities table were all ezmuze central sign-ins.
+ * Move them across so login has one mechanism rather than two.
+ */
+db.prepare(
+  `INSERT OR IGNORE INTO identities (provider, subject, user_id)
+   SELECT 'ezmuze', ezmuze_user_id, id FROM users WHERE ezmuze_user_id IS NOT NULL`,
+).run();
 addColumnIfMissing('bugs', 'stack_trace', `TEXT NOT NULL DEFAULT ''`);
 addColumnIfMissing('bugs', 'stack_fingerprint', `TEXT`);
 addColumnIfMissing('bugs', 'occurrences', `INTEGER NOT NULL DEFAULT 1`);
@@ -225,7 +253,10 @@ export function pruneExpired(): void {
 
 export interface UserRow {
   id: number;
+  /** Kept for the CLI and ADMIN_EZMUZE_USER_IDS; `identities` is authoritative. */
   ezmuze_user_id: string | null;
+  email: string | null;
+  password_hash: string | null;
   name: string;
   role: 'user' | 'manager' | 'admin';
   is_bot: number;
