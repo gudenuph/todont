@@ -347,7 +347,9 @@ upload dies at nginx with a 413 the app never sees.
 Claude can read the queue, pick something up, move it along and keep the ticket
 updated.
 
-It needs a token in `TODONT_TOKEN`:
+Setup, the token, the tool list and some board conventions are in
+[`docs/claude-access.md`](docs/claude-access.md). In short, it needs a token in
+`TODONT_TOKEN`:
 
 ```bash
 ssh root@your-host 'docker exec todont-tracker \
