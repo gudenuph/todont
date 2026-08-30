@@ -77,6 +77,7 @@ The full endpoint list is in the main README.
 | `move_bug` | to another column, optionally at an index |
 | `merge_bugs` / `unmerge_bug` | mark a duplicate, or split it back out |
 | `assign_bug` | set or clear the assignee |
+| `block_bug` / `unblock_bug` | "this cannot start until that is done"; loops are refused |
 | `comment_bug` | add to the thread |
 | `delete_bug` / `delete_comment` / `delete_attachment` | permanent, no undo |
 | `list_versions` | the versions reporters can pick |
@@ -107,6 +108,8 @@ Reasonable conventions, not enforced by anything:
   the comments and attachments with it.
 - A bug with a rising `occurrences` count is being hit repeatedly by real users, which is
   a stronger priority signal than its severity.
+- Check `blockedBy` before picking work up. A blocked ticket is not ready, however
+  urgent it looks, and moving it to `in-progress` only hides that.
 
 Stack traces are visible to this token because it is a manager. They are not visible to
 reporters or to the public, so do not paste one into a comment.

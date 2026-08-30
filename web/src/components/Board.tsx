@@ -73,6 +73,21 @@ export function Board({ bugs, columns, kinds, canManage, onOpen, onMove, onMerge
   const active = activeId === null ? null : (bugs.find((b) => b.id === activeId) ?? null);
 
   /**
+   * Hovering a blocked card answers "what is holding this up?" by dimming
+   * everything that is not an answer. Only blocked cards do it — on anything
+   * else there is nothing to point at — and never mid-drag, where dimming the
+   * board would fight the thing being dragged.
+   */
+  const [hoveredId, setHoveredId] = useState<number | null>(null);
+
+  const focused = useMemo(() => {
+    if (hoveredId === null || activeId !== null) return null;
+    const bug = bugs.find((b) => b.id === hoveredId);
+    if (!bug || bug.blockedBy.length === 0) return null;
+    return new Set<number>([bug.id, ...bug.blockedBy]);
+  }, [hoveredId, activeId, bugs]);
+
+  /**
    * A card's middle band means "merge with this one"; its top and bottom edges,
    * and any empty space, mean "drop into this column at this position". Without
    * the band split a full column would have nowhere left to drop *between*
@@ -218,6 +233,8 @@ export function Board({ bugs, columns, kinds, canManage, onOpen, onMove, onMerge
             mergeTarget={mergeTarget}
             indicator={indicator?.column === column.key ? indicator.renderIndex : null}
             kindOf={kindOf}
+            focused={focused}
+            onHover={setHoveredId}
             onOpen={onOpen}
           />
         ))}
@@ -263,6 +280,8 @@ function Column({
   mergeTarget,
   indicator,
   kindOf,
+  focused,
+  onHover,
   onOpen,
 }: {
   column: BoardColumn;
@@ -272,6 +291,8 @@ function Column({
   mergeTarget: number | null;
   indicator: number | null;
   kindOf: (key: string) => ItemKind | undefined;
+  focused: Set<number> | null;
+  onHover: (id: number | null) => void;
   onOpen: (id: number) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: columnId(column.key) });
@@ -310,6 +331,8 @@ function Column({
               canManage={canManage}
               isMergeTarget={mergeTarget === bug.id}
               kind={kindOf(bug.kind)}
+              dimmed={focused !== null && !focused.has(bug.id)}
+              onHover={onHover}
               onOpen={onOpen}
             />
           </div>
@@ -342,12 +365,16 @@ function DraggableCard({
   canManage,
   isMergeTarget,
   kind,
+  dimmed,
+  onHover,
   onOpen,
 }: {
   bug: Bug;
   canManage: boolean;
   isMergeTarget: boolean;
   kind: ItemKind | undefined;
+  dimmed: boolean;
+  onHover: (id: number | null) => void;
   onOpen: (id: number) => void;
 }) {
   const draggable = useDraggable({ id: cardId(bug.id), disabled: !canManage });
@@ -362,9 +389,17 @@ function DraggableCard({
     <div
       ref={setRef}
       data-card={bug.id}
-      className={`card${draggable.isDragging ? ' dragging' : ''}${isMergeTarget ? ' merge-target' : ''}`}
+      className={
+        'card' +
+        (draggable.isDragging ? ' dragging' : '') +
+        (isMergeTarget ? ' merge-target' : '') +
+        (bug.blockedBy.length ? ' is-blocked' : '') +
+        (dimmed ? ' dimmed' : '')
+      }
       style={{ '--sev-color': levelColor(kind, bug.severity) } as React.CSSProperties}
       onClick={() => onOpen(bug.id)}
+      onMouseEnter={() => onHover(bug.id)}
+      onMouseLeave={() => onHover(null)}
       {...(canManage ? draggable.listeners : {})}
       {...(canManage ? draggable.attributes : {})}
       role="button"
@@ -390,6 +425,15 @@ function CardFace({ bug, kind }: { bug: Bug; kind: ItemKind | undefined }) {
         <span className="id">#{bug.id}</span>
         <span>{levelShort(kind, bug.severity)}</span>
         <span className="grow" />
+        {bug.blockedBy.length ? (
+          <span
+            className="pill blocked"
+            title={`Blocked by ${bug.blockedBy.map((id) => '#' + id).join(', ')}`}
+          >
+            blocked
+            {bug.blockedBy.length > 1 ? ` ×${bug.blockedBy.length}` : ''}
+          </span>
+        ) : null}
         {bug.occurrences > 1 ? (
           <span className="pill hits" title={`Reported automatically ${bug.occurrences} times`}>
             ↻ {bug.occurrences.toLocaleString()}

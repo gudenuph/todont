@@ -102,6 +102,15 @@ export const api = {
   deleteComment: (id: number) =>
     call<{ bug: BugDetail }>(`/api/comments/${id}`, { method: 'DELETE' }),
 
+  addBlocker: (id: number, blockerId: number) =>
+    call<{ bug: BugDetail }>(`/api/bugs/${id}/blockers`, {
+      method: 'POST',
+      body: json({ blockerId }),
+    }),
+
+  removeBlocker: (id: number, blockerId: number) =>
+    call<{ bug: BugDetail }>(`/api/bugs/${id}/blockers/${blockerId}`, { method: 'DELETE' }),
+
   comment: (id: number, body: string) =>
     call<{ bug: BugDetail }>(`/api/bugs/${id}/comments`, { method: 'POST', body: json({ body }) }),
 

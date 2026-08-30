@@ -26,6 +26,7 @@ import {
   unmergeBug,
 } from '../lib/bugs.js';
 import { fingerprintStackTrace, normalizeStackTrace } from '../lib/stacktrace.js';
+import { addBlocker, removeBlocker } from '../lib/blocks.js';
 import { findByFingerprint, recordOccurrence } from './stacktraces.js';
 
 const MAX_TITLE = 200;
@@ -320,6 +321,37 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
   });
 
   /** Assign, unassign, or (for a manager) take a bug themselves. */
+  /**
+   * "This cannot start until that is done." Triage, so it needs manage — the
+   * same bar as moving a card, which is the decision it usually accompanies.
+   */
+  app.post<{ Params: { id: string }; Body: { blockerId?: number } }>(
+    '/api/bugs/:id/blockers',
+    async (req, reply) => {
+      const actor = requireScope(req, 'manage');
+      const blockedId = bugId(req.params.id);
+      const blockerId = Number(req.body?.blockerId);
+
+      if (!Number.isInteger(blockerId)) throw new HttpError(400, 'blockerId is required');
+
+      addBlocker(blockedId, blockerId, actor.user.id);
+      return reply.code(201).send({
+        bug: serializeDetail(requireBug(blockedId), canSeeStackTrace(req)),
+      });
+    },
+  );
+
+  app.delete<{ Params: { id: string; blockerId: string } }>(
+    '/api/bugs/:id/blockers/:blockerId',
+    async (req) => {
+      const actor = requireScope(req, 'manage');
+      const blockedId = bugId(req.params.id);
+
+      removeBlocker(blockedId, bugId(req.params.blockerId), actor.user.id);
+      return { bug: serializeDetail(requireBug(blockedId), canSeeStackTrace(req)) };
+    },
+  );
+
   app.post<{ Params: { id: string }; Body: { userId?: number | null } }>(
     '/api/bugs/:id/assign',
     async (req) => {

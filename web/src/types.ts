@@ -75,6 +75,9 @@ export interface BugCard {
   assignee: User | null;
   /** How many times this crash has been reported. */
   occurrences: number;
+  /** Ticket ids this one waits on, and ids waiting on it. */
+  blockedBy: number[];
+  blocking: number[];
   commentCount: number;
   attachmentCount: number;
   duplicateCount: number;
@@ -108,7 +111,18 @@ export interface BugEvent {
   createdAt: string;
 }
 
-export interface BugDetail extends BugCard {
+/** Just enough of a ticket to name it in a list of blockers. */
+export interface RelatedTicket {
+  id: number;
+  title: string;
+  status: string;
+  kind: string;
+  severity: string;
+}
+
+export interface BugDetail extends Omit<BugCard, 'blockedBy' | 'blocking'> {
+  blockedBy: RelatedTicket[];
+  blocking: RelatedTicket[];
   description: string;
   steps: string;
   expected: string;

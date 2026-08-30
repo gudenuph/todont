@@ -113,7 +113,8 @@ server.registerTool(
   'get_bug',
   {
     title: 'Read one bug',
-    description: 'Full detail: description, steps, attachments, comments, activity and duplicates.',
+    description:
+      'Full detail: description, steps, attachments, comments, activity, duplicates, and what this ticket is blocked by and blocking.',
     inputSchema: { id: z.number().describe('Bug number, as shown on the card') },
   },
   async ({ id }) => {
@@ -285,6 +286,47 @@ server.registerTool(
       return reply(
         await call(`/api/bugs/${id}/comments`, { method: 'POST', body: JSON.stringify({ body }) }),
       );
+    } catch (err) {
+      return fail(err);
+    }
+  },
+);
+
+server.registerTool(
+  'block_bug',
+  {
+    title: 'Mark a ticket blocked by another',
+    description:
+      '"`id` cannot start until `blockerId` is done." Refused if it would close a loop — directly, or through other tickets.',
+    inputSchema: {
+      id: z.number().describe('The ticket that has to wait'),
+      blockerId: z.number().describe('The ticket it is waiting on'),
+    },
+  },
+  async ({ id, blockerId }) => {
+    try {
+      return reply(
+        await call(`/api/bugs/${id}/blockers`, {
+          method: 'POST',
+          body: JSON.stringify({ blockerId }),
+        }),
+      );
+    } catch (err) {
+      return fail(err);
+    }
+  },
+);
+
+server.registerTool(
+  'unblock_bug',
+  {
+    title: 'Remove a blocker',
+    description: 'Drop the dependency between two tickets.',
+    inputSchema: { id: z.number(), blockerId: z.number() },
+  },
+  async ({ id, blockerId }) => {
+    try {
+      return reply(await call(`/api/bugs/${id}/blockers/${blockerId}`, { method: 'DELETE' }));
     } catch (err) {
       return fail(err);
     }

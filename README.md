@@ -69,6 +69,20 @@ is listed on the bug it merged into, with a "split it back out" button if that w
 wrong. A card's top and bottom edges belong to the column, not the card, so there is
 always somewhere to drop between two cards in a full column.
 
+## Dependencies
+
+A ticket can be **blocked by** any number of others, and shows both sides: what it is
+waiting on, and what is waiting on it. Setting one is triage, so it needs `manage` — the
+same bar as moving a card, which is usually the same decision.
+
+Loops are refused, transitively: if #4 already waits on #1 through a chain, #1 cannot be
+made to wait on #4, because neither could ever become unblocked.
+
+On the board a blocked card says so and its severity strip goes dashed. **Hovering one
+dims every card that is not holding it up**, so "what is this waiting on?" is answered by
+pointing rather than by opening anything. Only blocked cards do this — on anything else
+there would be nothing to point at — and never mid-drag.
+
 ## Roles
 
 | | read | raise & comment | move & merge | manage users |
@@ -308,6 +322,8 @@ the filled-in form afterwards — the prefill survives the handshake.
 | `POST /api/bugs/:id/merge` | `{intoId}` — `manage` |
 | `POST /api/bugs/:id/unmerge` | — `manage` |
 | `POST /api/bugs/:id/assign` | `{userId\|null}` — `manage` |
+| `POST /api/bugs/:id/blockers` | `{blockerId}` — `manage` |
+| `DELETE /api/bugs/:id/blockers/:blockerId` | — `manage` |
 | `POST /api/bugs/:id/comments` | `{body}` — `write` |
 | `DELETE /api/bugs/:id` | delete a bug outright — `manage` |
 | `DELETE /api/comments/:id` | delete one comment — `manage` |

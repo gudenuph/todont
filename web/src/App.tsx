@@ -162,13 +162,17 @@ export function App() {
     }
   }, []);
 
-  /** Splice a changed bug back into the board without a full reload. */
+  /**
+   * Re-read the board after a change to a ticket.
+   *
+   * A change can move more than the one card — merging removes it, blocking
+   * repaints another — and the detail shape is not a card shape, so splicing
+   * one in would be a half-truth. The read is one small request.
+   */
   const applyBug = useCallback((updated: BugDetail) => {
-    setBugs((prev) => {
-      const without = prev.filter((b) => b.id !== updated.id);
-      // A merged bug leaves the board; everything else takes its new place.
-      return updated.mergedIntoId === null ? [...without, updated] : without;
-    });
+    if (updated.mergedIntoId !== null) {
+      setBugs((prev) => prev.filter((b) => b.id !== updated.id));
+    }
     void refreshQuiet();
   }, []);
 
@@ -335,7 +339,7 @@ export function App() {
           onClose={() => setRaising(null)}
           onCreated={(bug) => {
             setRaising(null);
-            setBugs((prev) => [...prev, bug]);
+            void refreshQuiet();
             openBugById(bug.id);
           }}
         />

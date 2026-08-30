@@ -4,6 +4,7 @@ import { config } from '../config.js';
 import { db, logEvent, type BugRow, type UserRow } from '../db.js';
 import { HttpError, publicUser } from '../auth/identity.js';
 import { isColumn, isKind } from '../columns.js';
+import { allBlockEdges, blockEdgesFor, type BlockEdges } from './blocks.js';
 
 const POSITION_GAP = 1000;
 
@@ -48,7 +49,8 @@ type CardRow = BugRow & {
   duplicate_count: number;
 };
 
-export function serializeCard(b: CardRow) {
+export function serializeCard(b: CardRow, edges?: BlockEdges) {
+  const links = edges ?? blockEdgesFor(b.id);
   return {
     id: b.id,
     title: b.title,
@@ -61,6 +63,8 @@ export function serializeCard(b: CardRow) {
     reporter: publicUser(user(b.reporter_id)),
     assignee: publicUser(user(b.assignee_id)),
     occurrences: b.occurrences,
+    blockedBy: links.blockedBy,
+    blocking: links.blocking,
     commentCount: b.comment_count,
     attachmentCount: b.attachment_count,
     duplicateCount: b.duplicate_count,
@@ -147,7 +151,25 @@ export function serializeDetail(b: BugRow, canSeeStackTrace = false) {
       createdAt: e.created_at,
     })),
     duplicates: duplicates.map((d) => ({ ...serializeCard(d), description: d.description })),
+    blockedBy: relatedCards(blockEdgesFor(b.id).blockedBy),
+    blocking: relatedCards(blockEdgesFor(b.id).blocking),
   };
+}
+
+/** Just enough of a ticket to name it in a list of blockers. */
+function relatedCards(ids: number[]) {
+  if (!ids.length) return [];
+  const placeholders = ids.map(() => '?').join(',');
+  const rows = db
+    .prepare(`SELECT id, title, status, kind, severity FROM bugs WHERE id IN (${placeholders}) ORDER BY id`)
+    .all(...ids) as Array<{
+    id: number;
+    title: string;
+    status: string;
+    kind: string;
+    severity: string;
+  }>;
+  return rows;
 }
 
 export interface ListFilters {
@@ -202,7 +224,10 @@ export function listBugs(filters: ListFilters = {}) {
     LIMIT ?`;
 
   params.push(Math.min(filters.limit ?? 2000, 5000));
-  return (db.prepare(sql).all(...params) as CardRow[]).map(serializeCard);
+  const edges = allBlockEdges();
+  return (db.prepare(sql).all(...params) as CardRow[]).map((row) =>
+    serializeCard(row, edges.get(row.id)),
+  );
 }
 
 /**

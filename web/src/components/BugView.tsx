@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
-import type { BoardColumn, BugDetail, ItemKind, Session, User, Version } from '../types';
+import type {
+  BoardColumn,
+  BugCard,
+  BugDetail,
+  ItemKind,
+  RelatedTicket,
+  Session,
+  User,
+  Version,
+} from '../types';
 import { VersionPicker } from './VersionPicker';
 import { levelColor, levelLabel } from '../severity';
 
@@ -41,6 +50,14 @@ function describeEvent(type: string, detail: string): string {
       return `added ${String(data.count ?? 1)} attachment(s)`;
     case 'attachment_removed':
       return `removed an attachment`;
+    case 'blocked_by_added':
+      return `marked this blocked by #${String(data.blocker)}`;
+    case 'blocked_by_removed':
+      return `removed #${String(data.blocker)} as a blocker`;
+    case 'now_blocking':
+      return `made this block #${String(data.blocked)}`;
+    case 'no_longer_blocking':
+      return `stopped this blocking #${String(data.blocked)}`;
     case 'comment_deleted':
       return `deleted a comment by ${String(data.author ?? 'someone')}`;
     default:
@@ -91,6 +108,8 @@ export function BugView({
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [candidates, setCandidates] = useState<BugCard[]>([]);
+  const [blockerChoice, setBlockerChoice] = useState('');
 
   const canManage = session.scopes?.includes('manage') ?? false;
   const canWrite = session.scopes?.includes('write') ?? false;
@@ -130,6 +149,10 @@ export function BugView({
       .assignable()
       .then(({ users }) => setAssignable(users))
       .catch(() => setAssignable([]));
+    void api
+      .bugs()
+      .then(({ bugs }) => setCandidates(bugs))
+      .catch(() => setCandidates([]));
   }, [canManage]);
 
   /** Every mutation returns the fresh bug, so the board and this view stay in step. */
@@ -488,6 +511,96 @@ export function BugView({
                 </div>
               ) : null}
 
+              {bug.blockedBy.length || bug.blocking.length || canManage ? (
+                <div className="detail-section">
+                  <h3>Dependencies</h3>
+
+                  <div className="dep-group">
+                    <span className="dep-label">Blocked by</span>
+                    {bug.blockedBy.length ? (
+                      <div className="dep-list">
+                        {bug.blockedBy.map((t) => (
+                          <TicketChip
+                            key={t.id}
+                            ticket={t}
+                            onOpen={onOpenOther}
+                            onRemove={
+                              canManage && !busy
+                                ? () => void mutate(() => api.removeBlocker(bug.id, t.id))
+                                : undefined
+                            }
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="dep-none">Nothing — this one can start</span>
+                    )}
+                  </div>
+
+                  <div className="dep-group">
+                    <span className="dep-label">Blocking</span>
+                    {bug.blocking.length ? (
+                      <div className="dep-list">
+                        {bug.blocking.map((t) => (
+                          <TicketChip
+                            key={t.id}
+                            ticket={t}
+                            onOpen={onOpenOther}
+                            onRemove={
+                              canManage && !busy
+                                ? () => void mutate(() => api.removeBlocker(t.id, bug.id))
+                                : undefined
+                            }
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="dep-none">Nothing is waiting on this</span>
+                    )}
+                  </div>
+
+                  {canManage ? (
+                    <div className="dep-add">
+                      <select
+                        aria-label="Add a blocker"
+                        value={blockerChoice}
+                        disabled={busy}
+                        onChange={(e) => setBlockerChoice(e.target.value)}
+                      >
+                        <option value="">Blocked by…</option>
+                        {candidates
+                          .filter(
+                            (c) =>
+                              c.id !== bug.id &&
+                              !bug.blockedBy.some((t) => t.id === c.id) &&
+                              // Offering something this ticket already blocks
+                              // would only produce a cycle the server refuses.
+                              !bug.blocking.some((t) => t.id === c.id),
+                          )
+                          .map((c) => (
+                            <option key={c.id} value={c.id}>
+                              #{c.id} — {c.title.slice(0, 60)}
+                            </option>
+                          ))}
+                      </select>
+                      <button
+                        className="btn small"
+                        disabled={busy || !blockerChoice}
+                        onClick={() =>
+                          void mutate(async () => {
+                            const result = await api.addBlocker(bug.id, Number(blockerChoice));
+                            setBlockerChoice('');
+                            return result;
+                          })
+                        }
+                      >
+                        Add
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
               <div className="detail-section">
                 <h3>Discussion</h3>
                 <div className="thread">
@@ -774,6 +887,29 @@ function Field({
       <label>{label}</label>
       <textarea rows={rows} value={value} onChange={(e) => onChange(e.target.value)} />
     </div>
+  );
+}
+
+function TicketChip({
+  ticket,
+  onOpen,
+  onRemove,
+}: {
+  ticket: RelatedTicket;
+  onOpen: (id: number) => void;
+  onRemove?: () => void;
+}) {
+  return (
+    <span className="dep-chip">
+      <button className="dep-open" onClick={() => onOpen(ticket.id)} title={ticket.title}>
+        <span className="dep-id">#{ticket.id}</span> {ticket.title}
+      </button>
+      {onRemove ? (
+        <button className="dep-remove" onClick={onRemove} aria-label={`Remove #${ticket.id}`}>
+          ×
+        </button>
+      ) : null}
+    </span>
   );
 }
 

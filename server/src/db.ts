@@ -102,6 +102,17 @@ CREATE TABLE IF NOT EXISTS events (
 );
 CREATE INDEX IF NOT EXISTS idx_events_bug ON events(bug_id, id);
 
+-- "This cannot start until that is done." Many-to-many: a ticket can wait on
+-- several things and hold up several others. Rows die with either ticket.
+CREATE TABLE IF NOT EXISTS blocks (
+  blocked_id  INTEGER NOT NULL REFERENCES bugs(id) ON DELETE CASCADE,
+  blocker_id  INTEGER NOT NULL REFERENCES bugs(id) ON DELETE CASCADE,
+  created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (blocked_id, blocker_id)
+);
+CREATE INDEX IF NOT EXISTS idx_blocks_blocker ON blocks(blocker_id);
+
 -- Shipped versions, registered by the ezmuze publishing pipeline so reporters
 -- pick their build instead of typing it. Bugs keep the version as plain text,
 -- not a foreign key, so removing a version never rewrites history.
