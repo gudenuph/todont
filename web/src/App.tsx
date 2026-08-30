@@ -6,7 +6,7 @@ import { SignIn } from './components/SignIn';
 import { NewBug } from './components/NewBug';
 import { RaiseButton } from './components/RaiseButton';
 import { BugView } from './components/BugView';
-import { Users } from './components/Users';
+import { Admin } from './components/Admin';
 
 /**
  * A report ezmuze started for us, waiting on a person to finish it.
@@ -61,7 +61,7 @@ export function App() {
 
   const [signingIn, setSigningIn] = useState(false);
   const [raising, setRaising] = useState<PendingRaise | null>(null);
-  const [showUsers, setShowUsers] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
   const [onlyMine, setOnlyMine] = useState(false);
   const [openBug, setOpenBug] = useState<number | null>(bugFromHash());
 
@@ -84,6 +84,7 @@ export function App() {
         const [loadedMeta, loadedSession] = await Promise.all([api.meta(), api.me()]);
         setMeta(loadedMeta);
         setSession(loadedSession);
+        if (loadedMeta.board?.name) document.title = loadedMeta.board.name;
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Could not reach the tracker');
       }
@@ -176,6 +177,18 @@ export function App() {
     void refreshQuiet();
   }, []);
 
+  /** Lanes and the board name can change under us, from the admin dialog. */
+  async function reloadMeta() {
+    try {
+      const loaded = await api.meta();
+      setMeta(loaded);
+      document.title = loaded.board?.name ?? 'ToDont';
+    } catch {
+      /* keep what we already have */
+    }
+    await refreshQuiet();
+  }
+
   /** Merges and moves touch more than one card, so re-read the board. */
   async function refreshQuiet() {
     try {
@@ -214,7 +227,7 @@ export function App() {
   async function signOut() {
     await api.signOut().catch(() => undefined);
     setSession({ user: null });
-    setShowUsers(false);
+    setShowAdmin(false);
     // "Only my bugs" needs a signed-in caller; leaving it on would 401 the board.
     setOnlyMine(false);
   }
@@ -226,8 +239,8 @@ export function App() {
       <header className="topbar">
         <div className="brand">
           <span className="mark">◆</span>
-          <span>ezmuze bugs</span>
-          <span className="sub">what's broken, and who's on it</span>
+          <span>{meta?.board?.name ?? 'ToDont'}</span>
+          {meta?.board?.tagline ? <span className="sub">{meta.board.tagline}</span> : null}
         </div>
 
         <div className="spacer" />
@@ -255,8 +268,8 @@ export function App() {
               onRaise={(k) => setRaising({ kind: k, prefill: {}, knownBug: null })}
             />
             {isAdmin ? (
-              <button className="btn ghost" onClick={() => setShowUsers(true)}>
-                Users
+              <button className="btn ghost" onClick={() => setShowAdmin(true)}>
+                Admin
               </button>
             ) : null}
             <span className="whoami">
@@ -366,8 +379,12 @@ export function App() {
         />
       ) : null}
 
-      {showUsers && session.user ? (
-        <Users meId={session.user.id} onClose={() => setShowUsers(false)} />
+      {showAdmin && session.user ? (
+        <Admin
+          meId={session.user.id}
+          onChanged={() => void reloadMeta()}
+          onClose={() => setShowAdmin(false)}
+        />
       ) : null}
     </div>
   );

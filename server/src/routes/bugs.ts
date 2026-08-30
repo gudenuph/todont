@@ -2,13 +2,13 @@ import type { FastifyInstance } from 'fastify';
 import { db, logEvent, type BugRow } from '../db.js';
 import {
   DEFAULT_KIND,
-  INTAKE_COLUMN,
   defaultLevelFor,
   isKind,
   isLevelOf,
   levelsFor,
   translateLevel,
 } from '../columns.js';
+import { intakeColumn } from '../lib/board.js';
 import {
   HttpError,
   canSeeStackTrace,
@@ -56,7 +56,7 @@ function bugId(raw: string): number {
  */
 function assertCanEdit(actor: Actor, bug: BugRow): void {
   if (actor.scopes.has('manage')) return;
-  if (bug.reporter_id === actor.user.id && bug.status === INTAKE_COLUMN) return;
+  if (bug.reporter_id === actor.user.id && bug.status === intakeColumn()) return;
   throw new HttpError(403, 'Only a manager can edit this bug now');
 }
 
@@ -169,8 +169,8 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
 
     // Everything lands in the intake column; only a manager may raise it
     // straight into a triaged one.
-    let status = INTAKE_COLUMN;
-    if (body.status && body.status !== INTAKE_COLUMN) {
+    let status = intakeColumn();
+    if (body.status && body.status !== status) {
       requireScope(req, 'manage');
       status = body.status;
     }

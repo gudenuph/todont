@@ -48,19 +48,25 @@ from the dialog — "this is not a bug, it is a request" is a triage decision, s
 
 ## The board
 
-Nine columns, left to right. `key` is what the API uses; the label is what people see.
+Lanes live in the database and are edited from the **Admin** dialog — add, rename,
+recolour, reorder, remove. A new instance is seeded with nine: Unconfirmed, Confirmed,
+Backlog, Current focus, In release queue, In beta testing, Shipped, On hold, Rejected.
 
-| key | label | |
-|---|---|---|
-| `unconfirmed` | Unconfirmed | where every new bug lands |
-| `confirmed` | Confirmed | |
-| `backlog` | Backlog | |
-| `current-focus` | Current focus | |
-| `in-progress` | In release queue | renamed for readers; the key is unchanged |
-| `in-beta-testing` | In beta testing | |
-| `shipped` | Shipped | |
-| `on-hold` | On hold | |
-| `rejected` | Rejected | |
+Each lane has a permanent `key`, which is what every ticket stores, and a `label`, which
+is what people see. Renaming a lane changes only the label, so no ticket moves — this is
+why "In progress" could become "In release queue" without a migration. The key is
+generated from the name once, at creation, and never changes.
+
+Rules the admin routes enforce, so the board cannot be broken from the panel:
+
+- **Exactly one intake lane.** Naming a new one stands the old one down; clearing the
+  last one is refused, because new reports need somewhere to land.
+- **The intake lane cannot be removed**, nor can the last remaining lane.
+- **Removing a lane that holds tickets requires saying where they go.** Nothing is
+  silently dropped.
+- **Reorder sends the whole order at once**, so there is no half-applied state.
+
+The board's name and tagline are settings too, on the same dialog.
 
 **Dragging.** Drop a card on a column to move it there; the position within the column
 is kept, so a column can be ordered by priority. Drop a card on the **middle** of
@@ -341,6 +347,9 @@ the filled-in form afterwards — the prefill survives the handshake.
 | `POST /api/versions` | register a release — `versions` |
 | `DELETE /api/versions/:id` | remove a mistyped one — `admin` |
 | `GET /api/health` | liveness |
+| `GET/POST /api/admin/columns`, `PATCH`/`DELETE /api/admin/columns/:id` | lanes — `admin` |
+| `POST /api/admin/columns/reorder` | `{ids}` in the new order — `admin` |
+| `GET/PATCH /api/admin/settings` | board name and tagline — `admin` |
 
 Attachments accept PNG, JPEG, GIF, WebP, **WebM, MP4**, PDF and plain text — 50MB each
 and 10 per bug. Screen recordings play inline on the bug; they are served as a stream

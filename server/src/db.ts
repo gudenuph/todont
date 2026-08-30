@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import Database from 'better-sqlite3';
 import { config } from './config.js';
-import { DEFAULT_KIND, INTAKE_COLUMN } from './columns.js';
+import { DEFAULT_KIND, SEED_COLUMNS } from './columns.js';
 
 fs.mkdirSync(config.dataDir, { recursive: true });
 fs.mkdirSync(config.uploadDir, { recursive: true });
@@ -57,7 +57,9 @@ CREATE TABLE IF NOT EXISTS bugs (
   occurrences    INTEGER NOT NULL DEFAULT 1, -- how many times it has been hit
   app_version    TEXT NOT NULL DEFAULT '',
   environment    TEXT NOT NULL DEFAULT '',
-  status         TEXT NOT NULL DEFAULT '${INTAKE_COLUMN}',
+  -- A fallback only: every insert names its column explicitly, and which lane
+  -- is the intake one is a setting now, not a constant.
+  status         TEXT NOT NULL DEFAULT 'unconfirmed',
   position       REAL NOT NULL DEFAULT 0,
   reporter_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
   assignee_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -101,6 +103,24 @@ CREATE TABLE IF NOT EXISTS events (
   created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_events_bug ON events(bug_id, id);
+
+-- The board's lanes. These used to be a constant in the source; they are rows
+-- so an instance can shape its own workflow without a deploy.
+CREATE TABLE IF NOT EXISTS columns (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  key          TEXT NOT NULL UNIQUE,   -- permanent; bugs.status holds this
+  label        TEXT NOT NULL,          -- display only, rename freely
+  color        TEXT NOT NULL,
+  position     INTEGER NOT NULL,
+  is_intake    INTEGER NOT NULL DEFAULT 0,
+  is_terminal  INTEGER NOT NULL DEFAULT 0
+);
+
+-- Instance settings: board name, tagline. Key/value because there are few.
+CREATE TABLE IF NOT EXISTS settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
 
 -- "This cannot start until that is done." Many-to-many: a ticket can wait on
 -- several things and hold up several others. Rows die with either ticket.
@@ -170,6 +190,21 @@ addColumnIfMissing('bugs', 'occurrences', `INTEGER NOT NULL DEFAULT 1`);
 // Not unique: a fingerprint can legitimately appear on a bug and on duplicates
 // merged into it, and the lookup resolves to the one still on the board.
 db.exec(`CREATE INDEX IF NOT EXISTS idx_bugs_fingerprint ON bugs(stack_fingerprint)`);
+
+/**
+ * Seed the lanes on a brand new database only. An existing instance keeps
+ * whatever its admins have made of them.
+ */
+const columnCount = (db.prepare(`SELECT COUNT(*) AS n FROM columns`).get() as { n: number }).n;
+if (columnCount === 0) {
+  const insert = db.prepare(
+    `INSERT INTO columns (key, label, color, position, is_intake, is_terminal)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+  );
+  SEED_COLUMNS.forEach((c, i) => {
+    insert.run(c.key, c.label, c.color, (i + 1) * 10, c.intake ? 1 : 0, c.terminal ? 1 : 0);
+  });
+}
 
 /**
  * Someone reporting against a build that is not out yet still needs something

@@ -1236,3 +1236,57 @@ textarea.mono,
   flex: 1;
   min-width: 0;
 }
+
+/* ------------------------------------------------------------- admin panel */
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.tab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 9px 14px;
+  font-size: 13px;
+}
+
+.tab:hover {
+  color: var(--text);
+}
+
+.tab.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.table.lanes td {
+  vertical-align: top;
+}
+
+.table.lanes input[type='text'] {
+  padding: 5px 8px;
+}
+
+.table.lanes input[type='color'] {
+  width: 38px;
+  height: 28px;
+  padding: 2px;
+  background: var(--backdrop);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+/* The permanent key behind a lane's name, so a rename is visibly harmless. */
+.lane-key {
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-size: 10px;
+  color: var(--text-faint);
+  margin-top: 3px;
+}

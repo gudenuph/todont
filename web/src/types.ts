@@ -36,7 +36,24 @@ export interface Version {
   isUnreleased: boolean;
 }
 
+export interface BoardSettings {
+  name: string;
+  tagline: string;
+}
+
+export interface AdminColumn {
+  id: number;
+  key: string;
+  label: string;
+  color: string;
+  position: number;
+  intake: boolean;
+  terminal: boolean;
+  bugCount: number;
+}
+
 export interface Meta {
+  board: BoardSettings;
   columns: BoardColumn[];
   environments: string[];
   /** Newest release first, with "Unreleased" pinned last. */

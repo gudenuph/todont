@@ -1,4 +1,14 @@
-import type { AdminUser, BugCard, BugDetail, Meta, Prefill, Session, User } from './types';
+import type {
+  AdminColumn,
+  AdminUser,
+  BoardSettings,
+  BugCard,
+  BugDetail,
+  Meta,
+  Prefill,
+  Session,
+  User,
+} from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -130,4 +140,36 @@ export const api = {
     call<{ user: User }>(`/api/users/${id}/role`, { method: 'POST', body: json({ role }) }),
 
   assignable: () => call<{ users: User[] }>('/api/assignable'),
+
+  // ---------------------------------------------------------------- admin
+
+  adminSettings: () => call<{ settings: BoardSettings }>('/api/admin/settings'),
+
+  updateAdminSettings: (settings: Partial<BoardSettings>) =>
+    call<{ settings: BoardSettings }>('/api/admin/settings', {
+      method: 'PATCH',
+      body: json(settings),
+    }),
+
+  adminColumns: () => call<{ columns: AdminColumn[] }>('/api/admin/columns'),
+
+  createColumn: (data: { label: string; color?: string }) =>
+    call<{ column: AdminColumn }>('/api/admin/columns', { method: 'POST', body: json(data) }),
+
+  updateColumn: (
+    id: number,
+    data: { label?: string; color?: string; intake?: boolean; terminal?: boolean },
+  ) => call<{ column: AdminColumn }>(`/api/admin/columns/${id}`, { method: 'PATCH', body: json(data) }),
+
+  reorderColumns: (ids: number[]) =>
+    call<{ columns: AdminColumn[] }>('/api/admin/columns/reorder', {
+      method: 'POST',
+      body: json({ ids }),
+    }),
+
+  deleteColumn: (id: number, moveTo?: string) =>
+    call<{ ok: true; deleted: string; moved: number }>(
+      `/api/admin/columns/${id}${moveTo ? `?moveTo=${encodeURIComponent(moveTo)}` : ''}`,
+      { method: 'DELETE' },
+    ),
 };

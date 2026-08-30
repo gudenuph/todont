@@ -1,6 +1,6 @@
 /**
- * The board. `key` is what goes in bugs.status and never changes; `label` is
- * what people see. Order here is the left-to-right order on the board.
+ * The lanes a brand new instance starts with. Lanes live in the database and
+ * are edited from the admin panel — this is only what gets seeded, once.
  */
 export interface BoardColumn {
   key: string;
@@ -13,7 +13,7 @@ export interface BoardColumn {
   terminal?: boolean;
 }
 
-export const COLUMNS: BoardColumn[] = [
+export const SEED_COLUMNS: BoardColumn[] = [
   { key: 'unconfirmed', label: 'Unconfirmed', color: '#ffc440', intake: true },
   { key: 'confirmed', label: 'Confirmed', color: '#e68c32' },
   { key: 'backlog', label: 'Backlog', color: '#b07cff' },
@@ -26,16 +26,6 @@ export const COLUMNS: BoardColumn[] = [
   { key: 'rejected', label: 'Rejected', color: '#c44444', terminal: true },
 ];
 
-export const COLUMN_KEYS = COLUMNS.map((c) => c.key);
-export const INTAKE_COLUMN = COLUMNS.find((c) => c.intake)!.key;
-
-export function isColumn(key: unknown): key is string {
-  return typeof key === 'string' && COLUMN_KEYS.includes(key);
-}
-
-export function columnLabel(key: string): string {
-  return COLUMNS.find((c) => c.key === key)?.label ?? key;
-}
 
 /**
  * Where the bug happened. ezmuze studio ships a browser build (Blazor WASM) and

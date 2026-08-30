@@ -8,12 +8,14 @@ import fastifyStatic from '@fastify/static';
 
 import { config, isProd } from './config.js';
 import { pruneExpired } from './db.js';
-import { COLUMNS, ENVIRONMENTS, KINDS } from './columns.js';
+import { ENVIRONMENTS, KINDS } from './columns.js';
+import { boardSettings, listColumns, serializeColumn } from './lib/board.js';
 import { HttpError, resolveActor } from './auth/identity.js';
 import { authRoutes } from './routes/auth.js';
 import { bugRoutes } from './routes/bugs.js';
 import { attachmentRoutes } from './routes/attachments.js';
 import { adminRoutes } from './routes/admin.js';
+import { boardAdminRoutes } from './routes/board-admin.js';
 import { versionRoutes, listVersions, serializeVersion, defaultVersion } from './routes/versions.js';
 import { stackTraceRoutes } from './routes/stacktraces.js';
 import { draftRoutes } from './routes/drafts.js';
@@ -81,7 +83,10 @@ app.setErrorHandler((err: Error & { statusCode?: number }, req, reply) => {
 
 /** Board shape, so the client never hardcodes the column list. */
 app.get('/api/meta', async () => ({
-  columns: COLUMNS,
+  // Lanes and the board's name are instance settings now, so this is read from
+  // the database rather than baked into the bundle.
+  board: boardSettings(),
+  columns: listColumns().map(serializeColumn),
   environments: ENVIRONMENTS,
   // Versions come from the database, not a constant: the publishing pipeline
   // adds them, so they change without a deploy.
@@ -99,6 +104,7 @@ await app.register(authRoutes);
 await app.register(bugRoutes);
 await app.register(attachmentRoutes);
 await app.register(adminRoutes);
+await app.register(boardAdminRoutes);
 await app.register(versionRoutes);
 await app.register(stackTraceRoutes);
 await app.register(draftRoutes);
