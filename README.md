@@ -8,8 +8,7 @@ admins move cards between columns and merge duplicates; admins also manage who i
 manager. Your app and your coding agent reach the same board through a
 token-authenticated REST API.
 
-Built for, and running as, the bug tracker for [ezmuze studio](https://bugs.ezmuze.studio) —
-which is the instance most examples below are written against.
+Built for, and running as, the bug tracker for [ezmuze studio](https://bugs.ezmuze.studio).
 
 **MIT licensed.** See [LICENSE](LICENSE).
 
@@ -68,7 +67,7 @@ feature.
 
 **Raise a bug** in the top bar is a split button; its caret offers the feature request.
 A request hides the fields that make no sense for it — steps to reproduce, expected,
-actual, and the ezmuze version — and rewords what stays. Hidden fields are sent empty,
+actual, and the app version — and rewords what stays. Hidden fields are sent empty,
 so text typed before switching kind cannot ride along invisibly.
 
 **Each kind has its own scale**, in the same `severity` column, because it answers the
@@ -189,9 +188,10 @@ Admins promote and demote from the **Users** dialog in the top bar. An admin can
 change their own role, and the last admin cannot be demoted — otherwise the instance
 would have nobody able to manage anyone.
 
-**Bootstrap.** On a fresh database with no `ADMIN_EZMUZE_USER_IDS` set, the first
-person to sign in becomes admin. Sign in immediately after deploying, then pin your
-ezmuze user id into `ADMIN_EZMUZE_USER_IDS` so the role survives a database reset.
+**Bootstrap.** On a fresh database with no admin pinned in the environment, the first
+person to sign in becomes admin. Sign in immediately after deploying, then pin yourself
+— `ADMIN_EMAILS` for an email account, `ADMIN_EZMUZE_USER_IDS` for an ezmuze one — so
+the role survives a database reset.
 
 ---
 
@@ -276,9 +276,11 @@ password. Both are on the sign-in dialog.
 
 With no SMTP configured the link goes to the log, so an admin can still hand it over.
 
-### `ezmuze` — the app-connect handshake
+### `ezmuze` — an app-connect handshake
 
-The one ezmuze studio performs (`ezmuze-studio/docs/services-design.md` §2.1):
+The provider this tracker was first built against. It is here as a **worked example of
+a second provider**, not because you need it: if you are adding your own single sign-on,
+this is the shape it takes.
 
 1. The server calls `POST https://api.ezmuze.co.uk/Auth/AppConnectRequest` and gets a
    connection id back.
@@ -305,7 +307,7 @@ take over an existing local account.
 
 ## The API
 
-Base URL `https://bugs.ezmuze.studio`. Reads are public. Writes need either a session
+Base URL is wherever you host it. Reads are public. Writes need either a session
 cookie (the browser) or a token:
 
 ```
@@ -316,7 +318,7 @@ Tokens carry scopes — `read`, `write`, `manage`, `admin`, `versions` — and a
 actions are attributed on the board like anyone else's. A token can never exceed what
 its user's role allows.
 
-### Raising a bug from ezmuze
+### Raising a bug from your app
 
 ```http
 POST /api/bugs
@@ -332,7 +334,7 @@ Content-Type: application/json
   "severity": "major",            // critical | major | minor | trivial
   "appVersion": "2026.8.1",
   "environment": "Windows 11, desktop DX build",
-  "externalRef": "ezmuze-crash-9f2c"
+  "externalRef": "crash-9f2c"
 }
 ```
 
@@ -346,8 +348,8 @@ Everything lands in `unconfirmed` unless the token also has `manage` and passes
 
 ### Registering a release (the publishing pipeline)
 
-Reporters pick their ezmuze version from a list rather than typing it, and the list is
-whatever publishing has registered:
+Reporters pick their version from a list rather than typing it, and the list is
+whatever your publishing pipeline has registered:
 
 ```http
 POST /api/versions
@@ -381,7 +383,7 @@ old bug cannot silently drop the version it was raised against.
 
 ### Crash reporting: "have you seen this?"
 
-ezmuze can ask whether a crash is already known before it bothers anyone:
+Your app can ask whether a crash is already known before it bothers anyone:
 
 ```http
 POST /api/stack-traces/check
@@ -436,7 +438,7 @@ crash still behaves correctly.
 The count shows as `↻ 42` on the card and "Seen 42 times" on the ticket, and is separate
 from merged duplicates (`×3`), which count people who reported it by hand.
 
-### Raising a bug from inside ezmuze
+### Raising a bug from inside your app
 
 > The client-side brief lives in [`docs/client-integration.md`](docs/client-integration.md) —
 > hand that to whoever implements reporting inside your application.
@@ -451,12 +453,12 @@ POST /api/drafts            (no credential)
   "environment": "Windows (desktop)" }
 
 → { "id": "Df06lRssosI3",
-    "url": "https://bugs.ezmuze.studio/?draft=Df06lRssosI3",
+    "url": "https://bugs.example.com/?draft=Df06lRssosI3",
     "expiresInMinutes": 60 }
 ```
 
 **Without one** — just open a link:
-`https://bugs.ezmuze.studio/?raise=bug&version=2026.8.2&platform=Windows%20(desktop)`
+`https://bugs.example.com/?raise=bug&version=2026.8.2&platform=Windows%20(desktop)`
 
 A draft exists because a stack trace will not survive a query string, and putting one
 there would spill it into every proxy log on the way. It is **unauthenticated on
@@ -586,7 +588,7 @@ npm run dev
 ```
 
 The API listens on `127.0.0.1:4310` and Vite on `5173`, proxying `/api` across. Data
-goes in `./data` (gitignored). To exercise it as an admin without a real ezmuze
+goes in `./data` (gitignored). To exercise it as an admin without a federated
 account, mint a token instead:
 
 ```bash
