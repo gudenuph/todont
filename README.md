@@ -491,10 +491,11 @@ the filled-in form afterwards — the prefill survives the handshake.
 | `POST /api/bugs/:id/assign` | `{userId\|null}` — `manage` |
 | `POST /api/bugs/:id/blockers` | `{blockerId}` — `manage` |
 | `DELETE /api/bugs/:id/blockers/:blockerId` | — `manage` |
-| `POST /api/bugs/:id/comments` | `{body}` — `write` |
+| `POST /api/bugs/:id/comments` | `{body}` as JSON, **or** multipart with `body` and files — `write` |
 | `DELETE /api/bugs/:id` | delete a bug outright — `manage` |
 | `DELETE /api/comments/:id` | delete one comment — `manage` |
 | `POST /api/bugs/:id/attachments` | multipart — `write` |
+| `POST /api/comments/:id/attachments` | multipart — the comment's author or `manage` |
 | `GET /api/attachments/:id` | the file (public) |
 | `DELETE /api/attachments/:id` | uploader or `manage` |
 | `GET /api/assignable` | who a bug can be assigned to — `manage` |
@@ -512,8 +513,41 @@ the filled-in form afterwards — the prefill survives the handshake.
 | `POST /api/admin/columns/reorder` | `{ids}` in the new order — `admin` |
 | `GET/PATCH /api/admin/settings` | board name and tagline — `admin` |
 
-Attachments accept PNG, JPEG, GIF, WebP, **WebM, MP4**, PDF and plain text — 50MB each
-and 10 per bug. Screen recordings play inline on the bug; they are served as a stream
+### Images on a comment
+
+A comment can carry them too, which is usually where a screenshot belongs: it is
+answering something rather than describing the bug. Post the comment and its files in
+one request, so the comment is never briefly on the board without the picture it is
+about:
+
+```http
+POST /api/bugs/42/comments
+Authorization: Bearer ezb_...
+Content-Type: multipart/form-data
+
+body=Here is what I see after step 3
+file=@shot.png
+file=@after.png
+```
+
+JSON with a `{body}` still works and is unchanged. To add to a comment that is already
+there, `POST /api/comments/:id/attachments` with the files alone. **A picture on its own
+is a valid comment** — `body` may be empty when at least one file is attached.
+
+Comment images stay out of the bug's own gallery and out of the card's attachment count,
+so the badge always agrees with what the gallery shows. They are ordinary attachments
+otherwise: same types, same limits, same `GET /api/attachments/:id`, same delete rule.
+Deleting a comment takes its images with it, files and all.
+
+In the browser, paste or drop straight onto the comment box — a screenshot is on the
+clipboard far more often than it is on disk.
+
+### Limits and types
+
+Attachments accept PNG, JPEG, GIF, WebP, **WebM, MP4**, PDF and plain text — 50MB each,
+10 per bug and 10 per comment (a long thread with a screenshot on each reply is normal,
+so comments do not eat into the bug's own allowance). Comments take images and
+recordings only: a PDF belongs in the bug's attachments. Screen recordings play inline on the bug; they are served as a stream
 with byte-range support, which a browser needs in order to seek (and which Safari needs
 in order to play video at all).
 

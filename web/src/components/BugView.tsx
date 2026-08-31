@@ -13,6 +13,19 @@ import type {
 import { VersionPicker } from './VersionPicker';
 import { levelColor, levelLabel } from '../severity';
 
+/**
+ * Images and recordings only on a comment. A comment is where you show
+ * somebody what you mean; a PDF belongs in the bug's own attachments.
+ */
+const COMMENT_TYPES = [
+  'image/png',
+  'image/jpeg',
+  'image/gif',
+  'image/webp',
+  'video/webm',
+  'video/mp4',
+];
+
 function when(iso: string): string {
   // SQLite hands back "YYYY-MM-DD HH:MM:SS" in UTC with no zone marker.
   const date = new Date(iso.replace(' ', 'T') + (iso.endsWith('Z') ? '' : 'Z'));
@@ -110,6 +123,10 @@ export function BugView({
   const [bug, setBug] = useState<BugDetail | null>(null);
   const [assignable, setAssignable] = useState<User[]>([]);
   const [comment, setComment] = useState('');
+  /** Staged for the comment being written, with a preview URL to revoke. */
+  const [commentFiles, setCommentFiles] = useState<Array<{ file: File; preview: string }>>([]);
+  const [commentDragOver, setCommentDragOver] = useState(false);
+  const commentInput = useRef<HTMLInputElement>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -131,6 +148,21 @@ export function BugView({
   /** Managers can pull anything; everyone else only what they uploaded. */
   const canRemoveAttachment = (uploaderId: number | undefined) =>
     canManage || (uploaderId !== undefined && uploaderId === session.user?.id);
+
+  function stageForComment(list: FileList | File[]) {
+    const staged = [...list]
+      .filter((file) => COMMENT_TYPES.includes(file.type))
+      .map((file) => ({ file, preview: URL.createObjectURL(file) }));
+
+    setCommentFiles((prev) => [...prev, ...staged].slice(0, 10));
+  }
+
+  function dropStaged(index: number) {
+    setCommentFiles((prev) => {
+      URL.revokeObjectURL(prev[index].preview);
+      return prev.filter((_, i) => i !== index);
+    });
+  }
 
   useEffect(() => {
     let live = true;
@@ -632,28 +664,133 @@ export function BugView({
                             </button>
                           ) : null}
                         </div>
-                        <p>{c.body}</p>
+                        {c.body ? <p>{c.body}</p> : null}
+
+                        {c.attachments.length ? (
+                          <div className="comment-shots">
+                            {c.attachments.map((a) =>
+                              a.mime.startsWith('video/') ? (
+                                <div className="comment-shot" key={a.id} title={a.name}>
+                                  <video src={a.url} controls preload="metadata" playsInline />
+                                  {canRemoveAttachment(a.uploadedBy?.id) ? (
+                                    <button
+                                      className="shot-remove"
+                                      title="Remove this image"
+                                      disabled={busy}
+                                      onClick={() => void mutate(() => api.deleteAttachment(a.id))}
+                                    >
+                                      ×
+                                    </button>
+                                  ) : null}
+                                </div>
+                              ) : (
+                                <div className="comment-shot" key={a.id} title={a.name}>
+                                  <a href={a.url} target="_blank" rel="noreferrer">
+                                    <img src={a.url} alt={a.name} />
+                                  </a>
+                                  {canRemoveAttachment(a.uploadedBy?.id) ? (
+                                    <button
+                                      className="shot-remove"
+                                      title="Remove this image"
+                                      disabled={busy}
+                                      onClick={() => void mutate(() => api.deleteAttachment(a.id))}
+                                    >
+                                      ×
+                                    </button>
+                                  ) : null}
+                                </div>
+                              ),
+                            )}
+                          </div>
+                        ) : null}
                       </div>
                     ))
                   )}
                 </div>
 
                 {canWrite ? (
-                  <div style={{ marginTop: 10 }}>
+                  <div
+                    className={`composer${commentDragOver ? ' over' : ''}`}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setCommentDragOver(true);
+                    }}
+                    onDragLeave={() => setCommentDragOver(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setCommentDragOver(false);
+                      stageForComment(e.dataTransfer.files);
+                    }}
+                    /* A screenshot is on the clipboard far more often than on disk. */
+                    onPaste={(e) => {
+                      if (e.clipboardData.files.length) {
+                        e.preventDefault();
+                        stageForComment(e.clipboardData.files);
+                      }
+                    }}
+                  >
                     <textarea
                       rows={3}
                       value={comment}
-                      placeholder="Add a comment"
+                      placeholder="Add a comment — paste or drop an image to show what you mean"
                       onChange={(e) => setComment(e.target.value)}
                     />
-                    <div style={{ marginTop: 8, textAlign: 'right' }}>
+
+                    {commentFiles.length ? (
+                      <div className="comment-shots staged">
+                        {commentFiles.map((f, i) => (
+                          <div className="comment-shot" key={`${f.file.name}-${i}`}>
+                            {f.file.type.startsWith('video/') ? (
+                              <video src={f.preview} muted playsInline preload="metadata" />
+                            ) : (
+                              <img src={f.preview} alt={f.file.name} />
+                            )}
+                            <button
+                              className="shot-remove"
+                              title="Do not send this one"
+                              disabled={busy}
+                              onClick={() => dropStaged(i)}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    <div className="composer-actions">
+                      <button
+                        className="btn small"
+                        disabled={busy}
+                        onClick={() => commentInput.current?.click()}
+                      >
+                        Add image
+                      </button>
+                      <input
+                        ref={commentInput}
+                        type="file"
+                        accept={COMMENT_TYPES.join(',')}
+                        multiple
+                        hidden
+                        onChange={(e) => {
+                          if (e.target.files) stageForComment(e.target.files);
+                          e.target.value = '';
+                        }}
+                      />
                       <button
                         className="btn primary small"
-                        disabled={busy || !comment.trim()}
+                        /* A picture on its own says plenty. */
+                        disabled={busy || (!comment.trim() && !commentFiles.length)}
                         onClick={() =>
                           void mutate(async () => {
-                            const result = await api.comment(bug.id, comment);
+                            const result = await api.comment(
+                              bug.id,
+                              comment,
+                              commentFiles.map((f) => f.file),
+                            );
+                            for (const f of commentFiles) URL.revokeObjectURL(f.preview);
                             setComment('');
+                            setCommentFiles([]);
                             return result;
                           })
                         }

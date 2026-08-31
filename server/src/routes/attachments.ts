@@ -1,39 +1,18 @@
-import { createReadStream, createWriteStream } from 'node:fs';
+import { createReadStream } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { pipeline } from 'node:stream/promises';
-import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { config } from '../config.js';
-import { settingInt } from '../lib/settings.js';
 import { db, logEvent } from '../db.js';
+import { attach, isViewable, receiveFiles, requireComment, room } from '../lib/uploads.js';
 import { HttpError, canSeeStackTrace, requireScope, type Actor } from '../auth/identity.js';
 import { requireBug, serializeDetail } from '../lib/bugs.js';
 import type { BugRow } from '../db.js';
 
-/**
- * SVG is deliberately absent: it is a script-bearing document, and these files
- * are served from the same origin as the app.
- */
-const ALLOWED: Record<string, string> = {
-  'image/png': '.png',
-  'image/jpeg': '.jpg',
-  'image/gif': '.gif',
-  'image/webp': '.webp',
-  'video/webm': '.webm',
-  'video/mp4': '.mp4',
-  'text/plain': '.txt',
-  'application/pdf': '.pdf',
-};
-
-/** Shown inline in the bug rather than offered as a download. */
-function isViewable(mime: string): boolean {
-  return mime.startsWith('image/') || mime.startsWith('video/');
-}
-
 interface AttachmentRow {
   id: number;
   bug_id: number;
+  comment_id: number | null;
   filename: string;
   original_name: string;
   mime: string;
@@ -94,67 +73,49 @@ export async function attachmentRoutes(app: FastifyInstance): Promise<void> {
     const bug = requireBug(Number(req.params.id));
     assertCanAttach(actor, bug);
 
-    const existing = (
-      db.prepare(`SELECT COUNT(*) AS n FROM attachments WHERE bug_id = ?`).get(bug.id) as {
-        n: number;
-      }
-    ).n;
+    const { files } = await receiveFiles(req, room(bug.id, null));
+    if (!files.length) throw new HttpError(400, 'No file was uploaded');
 
-    const saved: number[] = [];
-
-    // The parser's ceiling was fixed at boot; this is the instance's own limit
-    // within it, so lowering it in the admin panel takes effect immediately.
-    const maxBytes = settingInt('uploads.maxBytes');
-
-    for await (const part of req.parts({ limits: { fileSize: maxBytes } })) {
-      if (part.type !== 'file') continue;
-
-      const maxPerBug = settingInt('uploads.maxPerBug');
-      if (existing + saved.length >= maxPerBug) {
-        throw new HttpError(400, `A bug can hold at most ${maxPerBug} attachments`);
-      }
-
-      const mime = (part.mimetype || '').toLowerCase();
-      const ext = ALLOWED[mime];
-      if (!ext) {
-        throw new HttpError(
-          415,
-          `${part.filename || 'That file'} is not an accepted type ` +
-            '(PNG, JPEG, GIF, WebP, WebM, MP4, PDF or plain text)',
-        );
-      }
-
-      const filename = `${randomUUID()}${ext}`;
-      const target = path.join(config.uploadDir, filename);
-
-      await pipeline(part.file, createWriteStream(target));
-
-      // @fastify/multipart flags this once the byte cap is hit mid-stream.
-      if (part.file.truncated) {
-        await fs.rm(target, { force: true });
-        throw new HttpError(
-          413,
-          `${part.filename || 'That file'} is larger than ${Math.round(maxBytes / 1024 / 1024)}MB`,
-        );
-      }
-
-      const { size } = await fs.stat(target);
-      const info = db
-        .prepare(
-          `INSERT INTO attachments (bug_id, filename, original_name, mime, size, uploaded_by)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-        )
-        .run(bug.id, filename, part.filename || filename, mime, size, actor.user.id);
-
-      saved.push(Number(info.lastInsertRowid));
-    }
-
-    if (!saved.length) throw new HttpError(400, 'No file was uploaded');
+    attach(files, bug.id, null, actor.user.id);
 
     db.prepare(`UPDATE bugs SET updated_at = datetime('now') WHERE id = ?`).run(bug.id);
-    logEvent(bug.id, actor.user.id, 'attachment_added', JSON.stringify({ count: saved.length }));
+    logEvent(bug.id, actor.user.id, 'attachment_added', JSON.stringify({ count: files.length }));
 
     return reply.code(201).send({ bug: serializeDetail(requireBug(bug.id), canSeeStackTrace(req)) });
+  });
+
+  /**
+   * Images on an existing comment.
+   *
+   * The comment can also be posted with its files in one request — see
+   * `POST /api/bugs/:id/comments` — which is what the web form and most API
+   * callers want. This is for adding to one that is already there.
+   */
+  app.post<{ Params: { id: string } }>('/api/comments/:id/attachments', async (req, reply) => {
+    const actor = requireScope(req, 'write');
+    const comment = requireComment(Number(req.params.id));
+
+    // Your own comment, or a manager's to any. Same shape as editing.
+    if (!actor.scopes.has('manage') && comment.author_id !== actor.user.id) {
+      throw new HttpError(403, 'You can only add images to your own comments');
+    }
+
+    const { files } = await receiveFiles(req, room(comment.bug_id, comment.id));
+    if (!files.length) throw new HttpError(400, 'No file was uploaded');
+
+    attach(files, comment.bug_id, comment.id, actor.user.id);
+
+    db.prepare(`UPDATE bugs SET updated_at = datetime('now') WHERE id = ?`).run(comment.bug_id);
+    logEvent(
+      comment.bug_id,
+      actor.user.id,
+      'attachment_added',
+      JSON.stringify({ count: files.length, onComment: true }),
+    );
+
+    return reply
+      .code(201)
+      .send({ bug: serializeDetail(requireBug(comment.bug_id), canSeeStackTrace(req)) });
   });
 
   /**

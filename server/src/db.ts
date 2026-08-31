@@ -292,6 +292,20 @@ db.prepare(
   }
 }
 
+/**
+ * An attachment can belong to a comment as well as to the bug.
+ *
+ * Nullable, and the bug id stays set either way: a comment image is still an
+ * attachment on that bug for permissions, for the activity trail, and for the
+ * sweep that deletes files when a bug goes. Only where it is *shown* differs.
+ */
+addColumnIfMissing(
+  'attachments',
+  'comment_id',
+  `INTEGER REFERENCES comments(id) ON DELETE CASCADE`,
+);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_attachments_comment ON attachments(comment_id)`);
+
 addColumnIfMissing('bugs', 'stack_trace', `TEXT NOT NULL DEFAULT ''`);
 addColumnIfMissing('bugs', 'stack_fingerprint', `TEXT`);
 addColumnIfMissing('bugs', 'occurrences', `INTEGER NOT NULL DEFAULT 1`);

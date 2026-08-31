@@ -76,7 +76,9 @@ test('a manager adds and removes a blocker from the ticket', async ({ adminPage:
   await expect(page.locator('.modal.wide')).toBeVisible();
 
   await page.locator('select[aria-label="Add a blocker"]').selectOption(String(holdingUp));
-  await page.getByRole('button', { name: 'Add' }).click();
+  // Exact: the composer below now has an "Add image" button, and the default
+  // name match is a substring one.
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
 
   const blockedBy = page.locator('.dep-group').first();
   await expect(blockedBy.locator('.dep-chip')).toContainText(`#${holdingUp}`);

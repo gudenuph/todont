@@ -168,8 +168,33 @@ export const api = {
   removeBlocker: (id: number, blockerId: number) =>
     call<{ bug: BugDetail }>(`/api/bugs/${id}/blockers/${blockerId}`, { method: 'DELETE' }),
 
-  comment: (id: number, body: string) =>
-    call<{ bug: BugDetail }>(`/api/bugs/${id}/comments`, { method: 'POST', body: json({ body }) }),
+  /**
+   * One request whether or not there are pictures: multipart when there are,
+   * so the comment is never briefly on the board without the screenshot it is
+   * about, plain JSON when there are not.
+   */
+  comment: (id: number, body: string, files: File[] = []) => {
+    if (!files.length) {
+      return call<{ bug: BugDetail }>(`/api/bugs/${id}/comments`, {
+        method: 'POST',
+        body: json({ body }),
+      });
+    }
+
+    const form = new FormData();
+    form.append('body', body);
+    for (const file of files) form.append('file', file);
+    return call<{ bug: BugDetail }>(`/api/bugs/${id}/comments`, { method: 'POST', body: form });
+  },
+
+  uploadToComment: (commentId: number, files: File[]) => {
+    const form = new FormData();
+    for (const file of files) form.append('file', file);
+    return call<{ bug: BugDetail }>(`/api/comments/${commentId}/attachments`, {
+      method: 'POST',
+      body: form,
+    });
+  },
 
   upload: (id: number, files: File[]) => {
     const form = new FormData();

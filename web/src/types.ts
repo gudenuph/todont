@@ -145,6 +145,8 @@ export interface Comment {
   author: User | null;
   body: string;
   createdAt: string;
+  /** Images posted with the comment, separate from the bug's own gallery. */
+  attachments: Attachment[];
 }
 
 export interface BugEvent {

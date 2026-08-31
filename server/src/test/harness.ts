@@ -95,3 +95,56 @@ export async function setRole(
 export function body<T = Record<string, unknown>>(res: { body: string }): T {
   return JSON.parse(res.body) as T;
 }
+
+/**
+ * A multipart body, built by hand.
+ *
+ * `inject` takes a buffer and headers, and there is no FormData on the way in,
+ * so the bytes are assembled here. Fields and files in the order given, because
+ * the server reads them as a stream and the order is part of what it copes with.
+ */
+export function multipart(
+  parts: Array<
+    | { field: string; value: string }
+    | { file: string; filename: string; mime: string; content: Buffer }
+  >,
+): { payload: Buffer; headers: Record<string, string> } {
+  const boundary = `----todonttest${Math.random().toString(36).slice(2)}`;
+  const CRLF = '\r\n';
+  const chunks: Buffer[] = [];
+
+  for (const part of parts) {
+    chunks.push(Buffer.from(`--${boundary}${CRLF}`));
+
+    if ('field' in part) {
+      chunks.push(
+        Buffer.from(`content-disposition: form-data; name="${part.field}"${CRLF}${CRLF}`),
+        Buffer.from(part.value),
+      );
+    } else {
+      chunks.push(
+        Buffer.from(
+          `content-disposition: form-data; name="${part.file}"; ` +
+            `filename="${part.filename}"${CRLF}` +
+            `content-type: ${part.mime}${CRLF}${CRLF}`,
+        ),
+        part.content,
+      );
+    }
+
+    chunks.push(Buffer.from(CRLF));
+  }
+
+  chunks.push(Buffer.from(`--${boundary}--${CRLF}`));
+
+  return {
+    payload: Buffer.concat(chunks),
+    headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
+  };
+}
+
+/** The smallest real PNG: one transparent pixel. */
+export const ONE_PIXEL_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+  'base64',
+);

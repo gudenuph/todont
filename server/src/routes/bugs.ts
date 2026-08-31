@@ -27,6 +27,7 @@ import {
 } from '../lib/bugs.js';
 import { fingerprintStackTrace, normalizeStackTrace } from '../lib/stacktrace.js';
 import { addBlocker, removeBlocker } from '../lib/blocks.js';
+import { attach, receiveFiles, removeFiles, room, type ReceivedFile } from '../lib/uploads.js';
 import { findByFingerprint, recordOccurrence } from './stacktraces.js';
 
 const MAX_TITLE = 200;
@@ -419,7 +420,15 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
       | { name: string }
       | undefined;
 
+    // The rows go with the comment through ON DELETE CASCADE; the files on
+    // disk do not, and would be orphaned bytes nothing can ever reach again.
+    const files = db
+      .prepare(`SELECT filename FROM attachments WHERE comment_id = ?`)
+      .all(row.id) as Array<{ filename: string }>;
+
     db.prepare(`DELETE FROM comments WHERE id = ?`).run(row.id);
+    await removeFiles(files.map((f) => f.filename));
+
     logEvent(
       row.bug_id,
       actor.user.id,
@@ -430,20 +439,54 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
     return { bug: serializeDetail(requireBug(row.bug_id), canSeeStackTrace(req)) };
   });
 
+  /**
+   * Comment, with or without images.
+   *
+   * Two shapes on purpose. `application/json` with a `body` is the simple case
+   * and is unchanged. `multipart/form-data` carries the same `body` as a field
+   * alongside the files, so a comment and its screenshots arrive in one request
+   * — no window where the comment is on the board without the picture it is
+   * about, and one call rather than two for anything driving the API.
+   */
   app.post<{ Params: { id: string }; Body: { body?: string } }>(
     '/api/bugs/:id/comments',
     async (req, reply) => {
       const actor = requireScope(req, 'write');
       const bug = requireBug(bugId(req.params.id));
 
-      const body = text(req.body?.body, MAX_BODY, 'Comment');
-      if (!body) throw new HttpError(400, 'A comment cannot be empty');
+      let body: string;
+      let files: ReceivedFile[] = [];
 
-      db.prepare(`INSERT INTO comments (bug_id, author_id, body) VALUES (?, ?, ?)`).run(
-        bug.id,
-        actor.user.id,
-        body,
+      if (req.isMultipart()) {
+        // Read the whole body first: the comment id the files hang off does not
+        // exist yet, and the request cannot be re-read once consumed.
+        const received = await receiveFiles(req, room(bug.id, null));
+        files = received.files;
+        body = text(received.fields.body, MAX_BODY, 'Comment');
+
+        // A picture on its own is a comment; wording it is optional.
+        if (!body && !files.length) throw new HttpError(400, 'A comment cannot be empty');
+      } else {
+        body = text(req.body?.body, MAX_BODY, 'Comment');
+        if (!body) throw new HttpError(400, 'A comment cannot be empty');
+      }
+
+      const commentId = Number(
+        db
+          .prepare(`INSERT INTO comments (bug_id, author_id, body) VALUES (?, ?, ?)`)
+          .run(bug.id, actor.user.id, body).lastInsertRowid,
       );
+
+      if (files.length) {
+        attach(files, bug.id, commentId, actor.user.id);
+        logEvent(
+          bug.id,
+          actor.user.id,
+          'attachment_added',
+          JSON.stringify({ count: files.length, onComment: true }),
+        );
+      }
+
       db.prepare(`UPDATE bugs SET updated_at = datetime('now') WHERE id = ?`).run(bug.id);
 
       return reply.code(201).send({ bug: serializeDetail(requireBug(bug.id), canSeeStackTrace(req)) });

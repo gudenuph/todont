@@ -40,7 +40,10 @@ export function resolveCanonical(bug: BugRow): BugRow {
 
 const COUNTS = `
   (SELECT COUNT(*) FROM comments c WHERE c.bug_id = b.id)      AS comment_count,
-  (SELECT COUNT(*) FROM attachments a WHERE a.bug_id = b.id)   AS attachment_count,
+  -- Comment images are excluded: the badge should agree with the gallery,
+  -- and a count that does not match what you then see is worse than no count.
+  (SELECT COUNT(*) FROM attachments a WHERE a.bug_id = b.id AND a.comment_id IS NULL)
+                                                              AS attachment_count,
   (SELECT COUNT(*) FROM bugs d WHERE d.merged_into_id = b.id)  AS duplicate_count
 `;
 
@@ -77,6 +80,7 @@ export function serializeCard(b: CardRow, edges?: BlockEdges) {
 
 interface AttachmentRow {
   id: number;
+  comment_id: number | null;
   original_name: string;
   mime: string;
   size: number;
@@ -89,13 +93,31 @@ interface AttachmentRow {
  * forgetting to pass it. Everyone still learns that a trace *exists* — that is
  * what tells a reporter their crash details arrived.
  */
+/** One attachment, however it is reached — the gallery or a comment. */
+function serializeAttachment(a: AttachmentRow) {
+  return {
+    id: a.id,
+    url: `/api/attachments/${a.id}`,
+    name: a.original_name,
+    mime: a.mime,
+    size: a.size,
+    uploadedBy: publicUser(user(a.uploaded_by)),
+    createdAt: a.created_at,
+  };
+}
+
 export function serializeDetail(b: BugRow, canSeeStackTrace = false) {
   const counts = db
     .prepare(`SELECT ${COUNTS} FROM bugs b WHERE b.id = ?`)
     .get(b.id) as Pick<CardRow, 'comment_count' | 'attachment_count' | 'duplicate_count'>;
 
   const attachments = db
-    .prepare(`SELECT * FROM attachments WHERE bug_id = ? ORDER BY id`)
+    .prepare(`SELECT * FROM attachments WHERE bug_id = ? AND comment_id IS NULL ORDER BY id`)
+    .all(b.id) as AttachmentRow[];
+
+  // Everything hanging off a comment, in one query rather than one per comment.
+  const commentFiles = db
+    .prepare(`SELECT * FROM attachments WHERE bug_id = ? AND comment_id IS NOT NULL ORDER BY id`)
     .all(b.id) as AttachmentRow[];
 
   const comments = db
@@ -129,20 +151,13 @@ export function serializeDetail(b: BugRow, canSeeStackTrace = false) {
     // of personal data, but the board is world-readable and this is not for it.
     stackTrace: canSeeStackTrace ? b.stack_trace : '',
     stackFingerprint: canSeeStackTrace ? b.stack_fingerprint : null,
-    attachments: attachments.map((a) => ({
-      id: a.id,
-      url: `/api/attachments/${a.id}`,
-      name: a.original_name,
-      mime: a.mime,
-      size: a.size,
-      uploadedBy: publicUser(user(a.uploaded_by)),
-      createdAt: a.created_at,
-    })),
+    attachments: attachments.map(serializeAttachment),
     comments: comments.map((c) => ({
       id: c.id,
       author: publicUser(user(c.author_id)),
       body: c.body,
       createdAt: c.created_at,
+      attachments: commentFiles.filter((a) => a.comment_id === c.id).map(serializeAttachment),
     })),
     events: events.map((e) => ({
       id: e.id,
