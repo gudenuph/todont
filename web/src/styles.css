@@ -308,6 +308,8 @@ a {
 /* ------------------------------------------------------------------- cards */
 
 .card {
+  /* The "new"/"moved" badge is pinned to the card's own corner. */
+  position: relative;
   background: var(--header);
   border: 1px solid var(--border-soft);
   border-left: 4px solid var(--sev-color, var(--border));
@@ -1551,4 +1553,140 @@ label.check {
 /* Not yet sent, so it should not look like part of the thread. */
 .comment-shots.staged .comment-shot {
   border-style: dashed;
+}
+
+/* ------------------------------------------------------ what just changed */
+
+/*
+ * A board is a shared thing, and most of the point of that is seeing somebody
+ * else's work land. These say what happened without a notification to dismiss:
+ * loud for a second, then gone. The card's own sliding between lanes is done
+ * with the Web Animations API (see live.ts) — this is only the colour.
+ */
+
+@keyframes card-arrive {
+  0% {
+    opacity: 0;
+    transform: translateY(-14px) scale(0.94);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(0) scale(1.02);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes ring-new {
+  0%,
+  55% {
+    box-shadow:
+      0 0 0 2px var(--mint),
+      0 0 18px color-mix(in srgb, var(--mint) 55%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+@keyframes ring-moved {
+  0%,
+  55% {
+    box-shadow:
+      0 0 0 2px var(--accent),
+      0 0 18px color-mix(in srgb, var(--accent) 55%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+@keyframes ring-updated {
+  0%,
+  55% {
+    box-shadow:
+      0 0 0 2px var(--amber),
+      0 0 18px color-mix(in srgb, var(--amber) 55%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+.card.just-new {
+  animation:
+    card-arrive 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    ring-new 4s ease-out forwards;
+}
+
+.card.just-moved {
+  animation: ring-moved 4s ease-out forwards;
+}
+
+.card.just-updated {
+  animation: ring-updated 4s ease-out forwards;
+}
+
+/* A word for what happened, so the colour is not the only carrier. */
+.card.just-new::after,
+.card.just-moved::after,
+.card.just-updated::after {
+  position: absolute;
+  top: -9px;
+  right: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--backdrop);
+  animation: badge-fade 4s ease-out forwards;
+  pointer-events: none;
+}
+
+.card.just-new::after {
+  content: 'new';
+  background: var(--mint);
+}
+
+.card.just-moved::after {
+  content: 'moved';
+  background: var(--accent);
+}
+
+.card.just-updated::after {
+  content: 'updated';
+  background: var(--amber);
+}
+
+@keyframes badge-fade {
+  0%,
+  55% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+/*
+ * Somebody who has asked their machine not to animate things means it. The
+ * ring still appears and still fades, because that is information; nothing
+ * moves or flies.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .card.just-new {
+    animation: ring-new 4s ease-out forwards;
+  }
+
+  .card.just-new::after,
+  .card.just-moved::after,
+  .card.just-updated::after {
+    animation: none;
+    opacity: 1;
+  }
 }

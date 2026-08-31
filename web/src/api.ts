@@ -122,7 +122,9 @@ export const api = {
     if (params.kind) qs.set('kind', params.kind);
     if (params.mine) qs.set('mine', 'true');
     const suffix = qs.toString() ? `?${qs}` : '';
-    return call<{ bugs: BugCard[] }>(`/api/bugs${suffix}`);
+    // The stamp comes back with the rows, so a polling client always knows
+    // exactly how current what it holds is.
+    return call<{ bugs: BugCard[]; stamp: string }>(`/api/bugs${suffix}`);
   },
 
   bug: (id: number) => call<{ bug: BugDetail }>(`/api/bugs/${id}`),

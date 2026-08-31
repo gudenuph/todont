@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api';
+import { DEFAULT_LIVE, diffBoard, useBoardPolling, type ChangeKind, type LiveSettings } from './live';
 import type { AuthOptions, BugCard, BugDetail, Meta, Prefill, Session } from './types';
 import { Board } from './components/Board';
 import { SignIn } from './components/SignIn';
@@ -71,12 +72,22 @@ export function App() {
   );
   const [openBug, setOpenBug] = useState<number | null>(bugFromHash());
 
+  // Live updates: what the instance allows, what just changed, and whether a
+  // drag is in progress (which must not be interrupted by a poll).
+  const [live, setLive] = useState<LiveSettings>(DEFAULT_LIVE);
+  const [changes, setChanges] = useState<Map<number, ChangeKind>>(new Map());
+  const [dragging, setDragging] = useState(false);
+  const bugsRef = useRef<BugCard[]>([]);
+  /** The stamp the board on screen corresponds to; set by every read. */
+  const stampRef = useRef<string | null>(null);
+
   const canManage = session.scopes?.includes('manage') ?? false;
   const isAdmin = session.user?.role === 'admin';
 
   const refresh = useCallback(async (q?: string, mine?: boolean) => {
     try {
-      const { bugs: list } = await api.bugs({ q: q?.trim() || undefined, mine });
+      const { bugs: list, stamp } = await api.bugs({ q: q?.trim() || undefined, mine });
+      stampRef.current = stamp;
       setBugs(list);
       setError('');
     } catch (err) {
@@ -96,6 +107,7 @@ export function App() {
         setSession(loadedSession);
         setAuth(loadedAuth);
         if (loadedMeta.board?.name) document.title = loadedMeta.board.name;
+        if (loadedMeta.live) setLive(loadedMeta.live);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Could not reach the tracker');
       }
@@ -105,10 +117,58 @@ export function App() {
   }, [refresh]);
 
   // Debounced search; the filter toggle rides the same effect.
+  //
+  // Skipped on the first run: the load above has already read the board with
+  // exactly these arguments, and doing it twice is a wasted request on every
+  // page load — and a second, silent update of the stamp the poller compares
+  // against, which would swallow anything that arrived in between.
+  const searched = useRef(false);
   useEffect(() => {
+    if (!searched.current) {
+      searched.current = true;
+      return;
+    }
     const timer = setTimeout(() => void refresh(query, onlyMine), 250);
     return () => clearTimeout(timer);
   }, [query, onlyMine, refresh]);
+
+  // Diffing needs the list as it is right now, not as it was when the poll
+  // was set up, so it is read from a ref rather than closed over.
+  useEffect(() => {
+    bugsRef.current = bugs;
+  }, [bugs]);
+
+  /**
+   * Somebody else changed something. Re-read, work out what moved, and let the
+   * board say so; the marks clear themselves so the page settles back down.
+   */
+  const pickUpChanges = useCallback(async () => {
+    try {
+      const { bugs: list, stamp } = await api.bugs({ q: query.trim() || undefined, mine: onlyMine });
+      const found = diffBoard(bugsRef.current, list);
+      stampRef.current = stamp;
+      setBugs(list);
+      if (found.size) setChanges(found);
+    } catch {
+      /* the board on screen stands until a read succeeds */
+    }
+  }, [query, onlyMine]);
+
+  useBoardPolling({
+    live,
+    knownStamp: stampRef,
+    // A poll mid-drag would re-render the board out from under the pointer.
+    paused: dragging,
+    onChanged: pickUpChanges,
+    onSettings: setLive,
+  });
+
+  // Highlights are an announcement, not a state: they fade on their own.
+  useEffect(() => {
+    if (!changes.size) return;
+    const timer = setTimeout(() => setChanges(new Map()), 4000);
+    return () => clearTimeout(timer);
+  }, [changes]);
 
   // The reset token comes out of the URL immediately: it is single use, and
   // leaving it in the address bar invites a refresh that wastes it.
@@ -233,7 +293,8 @@ export function App() {
   /** Merges and moves touch more than one card, so re-read the board. */
   async function refreshQuiet() {
     try {
-      const { bugs: list } = await api.bugs({ q: query.trim() || undefined, mine: onlyMine });
+      const { bugs: list, stamp } = await api.bugs({ q: query.trim() || undefined, mine: onlyMine });
+      stampRef.current = stamp;
       setBugs(list);
     } catch {
       /* the optimistic update stands until the next successful read */
@@ -385,6 +446,9 @@ export function App() {
           onOpen={(id) => openBugById(id)}
           onMove={(id, status, index) => void move(id, status, index)}
           onMerge={(id, intoId) => void merge(id, intoId)}
+          changes={changes}
+          animate={live.animate}
+          onDragChange={setDragging}
         />
       )}
 

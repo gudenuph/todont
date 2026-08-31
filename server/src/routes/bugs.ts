@@ -24,6 +24,7 @@ import {
   requireBug,
   serializeDetail,
   unmergeBug,
+  boardStamp,
 } from '../lib/bugs.js';
 import { fingerprintStackTrace, normalizeStackTrace } from '../lib/stacktrace.js';
 import { addBlocker, removeBlocker } from '../lib/blocks.js';
@@ -88,6 +89,11 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
         mineUserId: mine,
         includeMerged: req.query.includeMerged === 'true',
       }),
+      // The stamp these rows correspond to, so a polling client always knows
+      // exactly how current what it is showing is. Without it there is a gap
+      // between reading the board and taking a first stamp, and anything that
+      // happens inside that gap is absorbed into the baseline and never shown.
+      stamp: boardStamp(),
     };
   });
 

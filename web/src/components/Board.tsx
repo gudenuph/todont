@@ -15,6 +15,7 @@ import {
 } from '@dnd-kit/core';
 import type { BoardColumn, BugCard as Bug, ItemKind } from '../types';
 import { levelColor, levelShort } from '../severity';
+import { useCardFlip, type ChangeKind } from '../live';
 
 /** How much of a card's height (top and bottom) counts as "between cards". */
 const EDGE_BAND = 0.3;
@@ -42,13 +43,34 @@ interface Props {
   onOpen: (id: number) => void;
   onMove: (id: number, status: string, index: number) => void;
   onMerge: (id: number, intoId: number) => void;
+  /** What a poll found had changed since we last looked, by ticket id. */
+  changes?: Map<number, ChangeKind>;
+  animate?: boolean;
+  /** So the poll can hold off while somebody is mid-drag. */
+  onDragChange?: (dragging: boolean) => void;
 }
 
-export function Board({ bugs, columns, kinds, canManage, onOpen, onMove, onMerge }: Props) {
+export function Board({
+  bugs,
+  columns,
+  kinds,
+  canManage,
+  onOpen,
+  onMove,
+  onMerge,
+  changes,
+  animate = true,
+  onDragChange,
+}: Props) {
   const kindOf = (key: string) => kinds.find((k) => k.key === key);
   const [activeId, setActiveId] = useState<number | null>(null);
   const [mergeTarget, setMergeTarget] = useState<number | null>(null);
   const [indicator, setIndicator] = useState<DropIndicator | null>(null);
+
+  // Cards slide from where they were to where they now are whenever the list
+  // changes underneath — but never during a drag, where dnd-kit owns the
+  // transforms and a second animation would fight it.
+  useCardFlip(animate && activeId === null, bugs);
 
   // Read in dragEnd, where React state would still be a render behind.
   const live = useRef<{ merge: number | null; drop: DropIndicator | null }>({
@@ -125,6 +147,7 @@ export function Board({ bugs, columns, kinds, canManage, onOpen, onMove, onMerge
   function onDragStart(event: DragStartEvent) {
     const { value } = parseId(String(event.active.id));
     setActiveId(Number(value));
+    onDragChange?.(true);
   }
 
   function onDragMove(event: DragMoveEvent) {
@@ -182,6 +205,7 @@ export function Board({ bugs, columns, kinds, canManage, onOpen, onMove, onMerge
     const draggedId = Number(parseId(String(event.active.id)).value);
     const { merge, drop } = live.current;
 
+    onDragChange?.(false);
     setActiveId(null);
     setMergeTarget(null);
     setIndicator(null);
@@ -234,6 +258,7 @@ export function Board({ bugs, columns, kinds, canManage, onOpen, onMove, onMerge
             indicator={indicator?.column === column.key ? indicator.renderIndex : null}
             kindOf={kindOf}
             focused={focused}
+            changes={changes}
             onHover={setHoveredId}
             onOpen={onOpen}
           />
@@ -281,6 +306,7 @@ function Column({
   indicator,
   kindOf,
   focused,
+  changes,
   onHover,
   onOpen,
 }: {
@@ -292,6 +318,7 @@ function Column({
   indicator: number | null;
   kindOf: (key: string) => ItemKind | undefined;
   focused: Set<number> | null;
+  changes: Map<number, ChangeKind> | undefined;
   onHover: (id: number | null) => void;
   onOpen: (id: number) => void;
 }) {
@@ -332,6 +359,7 @@ function Column({
               isMergeTarget={mergeTarget === bug.id}
               kind={kindOf(bug.kind)}
               dimmed={focused !== null && !focused.has(bug.id)}
+              change={changes?.get(bug.id)}
               onHover={onHover}
               onOpen={onOpen}
             />
@@ -366,6 +394,7 @@ function DraggableCard({
   isMergeTarget,
   kind,
   dimmed,
+  change,
   onHover,
   onOpen,
 }: {
@@ -374,6 +403,7 @@ function DraggableCard({
   isMergeTarget: boolean;
   kind: ItemKind | undefined;
   dimmed: boolean;
+  change: ChangeKind | undefined;
   onHover: (id: number | null) => void;
   onOpen: (id: number) => void;
 }) {
@@ -394,7 +424,8 @@ function DraggableCard({
         (draggable.isDragging ? ' dragging' : '') +
         (isMergeTarget ? ' merge-target' : '') +
         (bug.blockedBy.length ? ' is-blocked' : '') +
-        (dimmed ? ' dimmed' : '')
+        (dimmed ? ' dimmed' : '') +
+        (change ? ` just-${change}` : '')
       }
       style={{ '--sev-color': levelColor(kind, bug.severity) } as React.CSSProperties}
       onClick={() => onOpen(bug.id)}

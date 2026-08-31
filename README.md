@@ -119,7 +119,7 @@ the environment supplies the starting value, a row in `settings` overrides it:
 |---|---|
 | Sign-in | which providers are on, whether anyone may sign up, whether an address must be confirmed, how long a session lasts |
 | Email | SMTP server, port, credentials, from address — with a **send a test** button, so you find out it works before a user finds out it does not |
-| Board | name, tagline, largest attachment, attachments per ticket |
+| Board | name, tagline, largest attachment, attachments per ticket, live updates |
 | Backups | how often, what goes in one, how many to keep, and where copies are sent — with a **back up now** button |
 
 Anything needed to **reach** the database or the site stays in the environment: `PORT`,
@@ -143,6 +143,48 @@ another card to merge the two as duplicates — the card you dragged leaves the 
 is listed on the bug it merged into, with a "split it back out" button if that was
 wrong. A card's top and bottom edges belong to the column, not the card, so there is
 always somewhere to drop between two cards in a full column.
+
+## Staying current
+
+An open board checks for changes on a timer and brings them in without a reload, so two
+people looking at the same board see the same thing. **Admin → Board → live updates**
+turns it on or off, sets the interval, and decides whether changes animate.
+
+It is a poll, not a socket. On a box small enough to run this, a short request every
+twenty seconds costs less — in code, and in memory held per viewer — than a connection
+kept open for everyone reading the board. The poll itself reads four numbers and returns
+a short string; the board is only re-read when that string differs from the one the tab
+already holds.
+
+That stamp comes back with the board data as well as from the poll, which matters more
+than it sounds: if the tab took its baseline separately, anything that happened between
+reading the board and taking the first stamp would be folded into the baseline and never
+shown, and the board would sit there quietly out of date.
+
+What you see when something changes:
+
+| | |
+|---|---|
+| **New** | drops in, ringed green, badged `new` |
+| **Moved** | slides from its old lane to its new one, ringed blue, badged `moved` |
+| **Updated** | ringed amber, badged `updated` |
+
+The slide is a FLIP animation — the card is laid out where it now belongs, then animated
+from where it used to be. Without it a card someone else moved simply teleports on the
+next poll and you are left working out what you missed.
+
+The marks clear themselves after a few seconds: they are an announcement, not a state.
+A card counts as updated when **what the card shows** has changed rather than when its
+timestamp has, because `updated_at` is stored to the second and an edit made in the same
+second as the change before it would otherwise slip past unmarked.
+
+Two things it will not do. It does not poll while you are dragging — re-rendering the
+board under the pointer would be both wrong and unpleasant — and it does not poll while
+the tab is in the background, though it checks the moment you come back to it. Anyone
+whose system asks for reduced motion gets the rings and badges without the movement.
+
+Five seconds is the floor whatever the panel is set to, so a mistyped `1` cannot have
+every open tab hammering the box.
 
 ## Dependencies
 
@@ -481,7 +523,7 @@ the filled-in form afterwards — the prefill survives the handshake.
 | | |
 |---|---|
 | `GET /api/meta` | columns and severities |
-| `GET /api/bugs?status=&kind=&q=&assignee=&mine=&includeMerged=` | the board; `mine=true` needs a signed-in caller |
+| `GET /api/bugs?status=&kind=&q=&assignee=&mine=&includeMerged=` | the board, plus the `stamp` it corresponds to; `mine=true` needs a signed-in caller |
 | `GET /api/bugs/:id` | one bug, with comments, attachments, activity, duplicates |
 | `POST /api/bugs` | raise one — `write` |
 | `PATCH /api/bugs/:id` | edit the text — `write` (reporter while untriaged, else `manage`) |
@@ -508,6 +550,7 @@ the filled-in form afterwards — the prefill survives the handshake.
 | `GET /api/versions` | the version list and the default (public) |
 | `POST /api/versions` | register a release — `versions` |
 | `DELETE /api/versions/:id` | remove a mistyped one — `admin` |
+| `GET /api/board/version` | has anything changed? a stamp plus the live-update policy (public) |
 | `GET /api/health` | liveness |
 | `GET/POST /api/admin/columns`, `PATCH`/`DELETE /api/admin/columns/:id` | lanes — `admin` |
 | `POST /api/admin/columns/reorder` | `{ids}` in the new order — `admin` |

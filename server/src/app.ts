@@ -10,6 +10,8 @@ import { config, isProd } from './config.js';
 import { pruneExpired } from './db.js';
 import { listEnvironments, listKinds } from './lib/catalog.js';
 import { boardSettings, listColumns, serializeColumn } from './lib/board.js';
+import { boardStamp } from './lib/bugs.js';
+import { settingBool, settingInt } from './lib/settings.js';
 import { HttpError, resolveActor } from './auth/identity.js';
 import { authRoutes } from './routes/auth.js';
 import { bugRoutes } from './routes/bugs.js';
@@ -39,6 +41,21 @@ export interface BuildOptions {
  * `app.inject()` — the whole stack, routes, hooks, auth and all — with no port
  * to bind and no process to manage.
  */
+/**
+ * How the board should keep itself current. Read on every meta fetch and with
+ * every stamp, so turning polling off in the panel reaches open tabs on their
+ * next poll rather than on their next reload.
+ */
+function liveSettings() {
+  return {
+    enabled: settingBool('live.enabled'),
+    // A floor, whatever the panel says: this is a poll, not a socket, and
+    // somebody typing 1 should not have every open tab hammering the box.
+    intervalSeconds: Math.max(5, settingInt('live.intervalSeconds')),
+    animate: settingBool('live.animate'),
+  };
+}
+
 export async function buildApp(options: BuildOptions = {}): Promise<FastifyInstance> {
   const app = Fastify({
     logger: isProd
@@ -108,6 +125,7 @@ export async function buildApp(options: BuildOptions = {}): Promise<FastifyInsta
     // Lanes and the board's name are instance settings now, so this is read from
     // the database rather than baked into the bundle.
     board: boardSettings(),
+    live: liveSettings(),
     columns: listColumns().map(serializeColumn),
     environments: listEnvironments(),
     // Versions come from the database, not a constant: the publishing pipeline
@@ -118,6 +136,17 @@ export async function buildApp(options: BuildOptions = {}): Promise<FastifyInsta
     // the dialog and the raise menu all read from one place.
     kinds: listKinds(),
   }));
+
+  /**
+   * What a polling board asks for. Public, like the board, and deliberately
+   * tiny: the answer is one short string, and the client only re-reads the
+   * board when it differs from the one it holds.
+   */
+  app.get('/api/board/version', async (_req, reply) => {
+    // Never cached: a stale stamp is a board that has quietly stopped updating.
+    reply.header('cache-control', 'no-store');
+    return { stamp: boardStamp(), live: liveSettings() };
+  });
 
   app.get('/api/health', async () => ({ ok: true, time: new Date().toISOString() }));
 

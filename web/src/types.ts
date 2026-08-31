@@ -81,6 +81,8 @@ export interface AdminKind extends Omit<ItemKind, 'levels'> {
 
 export interface Meta {
   board: BoardSettings;
+  /** Whether and how often an open board should check for changes. */
+  live: { enabled: boolean; intervalSeconds: number; animate: boolean };
   columns: BoardColumn[];
   environments: string[];
   /** Newest release first, with "Unreleased" pinned last. */

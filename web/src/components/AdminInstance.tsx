@@ -260,6 +260,78 @@ export function UploadsFields({ busy, run }: { busy: boolean; run: Runner }) {
   );
 }
 
+/**
+ * Live updates. A poll rather than a socket, so the only real decisions are
+ * whether to do it at all and how often.
+ */
+export function LiveFields({ busy, run }: { busy: boolean; run: Runner }) {
+  const [s, setS] = useState<Settings | null>(null);
+
+  const reload = () => api.instanceSettings().then((r) => setS(r.settings));
+  useEffect(() => {
+    void reload().catch(() => setS({}));
+  }, []);
+
+  if (!s) return null;
+
+  const save = (patch: Settings) => run(async () => { await api.updateInstanceSettings(patch); await reload(); });
+  const on = s['live.enabled'] === true;
+
+  return (
+    <>
+      <div className="field">
+        <label className="check">
+          <input
+            type="checkbox"
+            disabled={busy}
+            checked={on}
+            onChange={(e) => void save({ 'live.enabled': e.target.checked })}
+          />
+          Keep an open board up to date
+        </label>
+        <div className="hint">
+          Checks for changes on a timer and brings in anything new without a reload. Off,
+          a board shows what it showed when it was opened.
+        </div>
+      </div>
+
+      {on ? (
+        <>
+          <NumberField
+            label="Check every"
+            suffix="seconds"
+            value={Number(s['live.intervalSeconds'])}
+            busy={busy}
+            onSave={(v) => void save({ 'live.intervalSeconds': v })}
+            hint={
+              'Five seconds is the floor, whatever is typed here. The check itself is one ' +
+              'short request that reads three numbers; the board is only re-read when one ' +
+              'of them has actually moved.'
+            }
+          />
+
+          <div className="field">
+            <label className="check">
+              <input
+                type="checkbox"
+                disabled={busy}
+                checked={s['live.animate'] === true}
+                onChange={(e) => void save({ 'live.animate': e.target.checked })}
+              />
+              Animate what changed
+            </label>
+            <div className="hint">
+              A card that someone else moved slides to its new lane and is ringed for a
+              few seconds; a new one drops in. Off, changes simply appear. Anyone whose
+              system asks for reduced motion gets the quiet version regardless.
+            </div>
+          </div>
+        </>
+      ) : null}
+    </>
+  );
+}
+
 // -------------------------------------------------------------------- shared
 
 function Loading() {

@@ -93,6 +93,34 @@ interface AttachmentRow {
  * forgetting to pass it. Everyone still learns that a trace *exists* — that is
  * what tells a reporter their crash details arrived.
  */
+/**
+ * A cheap "has anything changed?" for the board.
+ *
+ * Three aggregates rather than the whole list: a client polling every twenty
+ * seconds should cost almost nothing, and only fetch the board itself once
+ * there is actually something new to show.
+ *
+ * All four parts earn their place. The event id moves on a move, a merge or an
+ * edit; the bug count catches one raised or deleted, which logs nothing; the
+ * comment count catches a comment added or removed, which changes the badge on
+ * the card; and updated_at catches the rest.
+ *
+ * `updated_at` is only second-resolution, so it is never trusted on its own —
+ * a comment posted in the same second as the change before it would otherwise
+ * leave the stamp exactly where it was, and every open board would sit there
+ * believing it was current.
+ */
+export function boardStamp(): string {
+  const bugs = db.prepare(`SELECT COUNT(*) AS n, MAX(updated_at) AS m FROM bugs`).get() as {
+    n: number;
+    m: string | null;
+  };
+  const events = db.prepare(`SELECT MAX(id) AS e FROM events`).get() as { e: number | null };
+  const comments = db.prepare(`SELECT COUNT(*) AS n FROM comments`).get() as { n: number };
+
+  return `${bugs.n}:${bugs.m ?? '-'}:${events.e ?? 0}:${comments.n}`;
+}
+
 /** One attachment, however it is reached — the gallery or a comment. */
 function serializeAttachment(a: AttachmentRow) {
   return {

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api';
 import type { AdminColumn, AdminUser, BoardSettings } from '../types';
 import { EnvironmentsTab, TypesTab } from './AdminCatalog';
-import { EmailTab, SignInTab, UploadsFields } from './AdminInstance';
+import { EmailTab, LiveFields, SignInTab, UploadsFields } from './AdminInstance';
 import { TokensTab } from './AdminTokens';
 import { BackupsTab } from './AdminBackups';
 
@@ -162,6 +162,9 @@ function BoardTab({ busy, run }: { busy: boolean; run: Runner }) {
 
       <hr style={{ border: 0, borderTop: '1px solid var(--border-soft)', margin: '18px 0' }} />
       <UploadsFields busy={busy} run={run} />
+
+      <hr style={{ border: 0, borderTop: '1px solid var(--border-soft)', margin: '18px 0' }} />
+      <LiveFields busy={busy} run={run} />
 
       <button
         className="btn primary"
