@@ -1432,3 +1432,58 @@ label.check {
   color: var(--text);
   user-select: all;
 }
+
+/* ------------------------------------------------------------------ backups */
+
+/* A heading inside a tab, separating one group of settings from the next. */
+.section-head {
+  margin: 26px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/*
+ * One backup destination, folded away until it is wanted. Most instances use
+ * one of these, so showing all of them expanded would bury the schedule.
+ */
+.dest {
+  margin: 12px 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--backdrop);
+}
+
+.dest > summary {
+  padding: 10px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  user-select: none;
+}
+
+.dest > summary:hover {
+  color: var(--accent);
+}
+
+.dest[open] > summary {
+  border-bottom: 1px solid var(--border);
+}
+
+.dest > *:not(summary) {
+  margin-left: 12px;
+  margin-right: 12px;
+}
+
+.dest > p:first-of-type {
+  margin-top: 12px;
+}
+
+.dest > *:last-child {
+  margin-bottom: 12px;
+}

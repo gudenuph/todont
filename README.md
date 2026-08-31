@@ -117,6 +117,7 @@ the environment supplies the starting value, a row in `settings` overrides it:
 | Sign-in | which providers are on, whether anyone may sign up, whether an address must be confirmed, how long a session lasts |
 | Email | SMTP server, port, credentials, from address — with a **send a test** button, so you find out it works before a user finds out it does not |
 | Board | name, tagline, largest attachment, attachments per ticket |
+| Backups | how often, what goes in one, how many to keep, and where copies are sent — with a **back up now** button |
 
 Anything needed to **reach** the database or the site stays in the environment: `PORT`,
 `HOST`, `DATA_DIR`, `PUBLIC_URL`, `COOKIE_SECRET`, `COOKIE_SECURE`, `SERVE_WEB`. Getting
@@ -641,29 +642,52 @@ The proxy host entry in Nginx Proxy Manager (admin UI on port 8181):
 
 ### Backups
 
-`deploy/backup.sh` snapshots the database, the uploads and the env file into one tarball,
-then **reads the database back out of the archive to prove it restores** — an unverified
-backup is a guess.
+**Admin → Backups.** Pick how often (never, hourly, daily, weekly), what goes in one, how
+many to keep, and where a copy is sent. There is a **back up now** button, because a
+destination you have not proved is a destination you do not have.
+
+A backup is one `.tar.gz` holding a consistent snapshot of the database and, if you want
+it, the attachments. A live SQLite file cannot simply be copied — a write mid-copy leaves
+a torn database that restores to nothing — so it is taken with `VACUUM INTO` while the
+server keeps serving. Restoring is `tar -xzf` over the data directory.
+
+The two halves are wildly different sizes, and that decides most of the configuration:
+the database is the tickets, the comments, the accounts and the history, and it is
+typically well under a megabyte. The attachments are usually a hundred times that. A
+database-only archive fits in an email; a full one does not.
+
+| Destination | What it needs |
+|---|---|
+| **This machine** | Nothing. Always written, `backup.keep` retained, oldest pruned first. |
+| **Email** | The mail server from the Email tab. Refused over 20MB, because most mailboxes bounce anything near 25 and do it silently. |
+| **Object storage** | An S3-compatible bucket — Backblaze B2, Cloudflare R2, MinIO, AWS. Endpoint, bucket, key, secret. Signed by hand, no SDK. |
+| **A command** | Off unless the server sets `BACKUP_ALLOW_COMMAND=true`. Runs with `$BACKUP_FILE` set to the archive. |
+
+Each is tried independently: one that fails is reported, and does not stop the others.
+
+**Copies on this machine are not a backup.** They cover deleting the wrong thing; they do
+not cover losing the machine. Configure at least one of the other three if the board
+matters. Object storage is the plainest answer — B2 and R2 both have free tiers far larger
+than a tracker will ever need, and neither wants a client running anywhere.
+
+**Google Drive, Dropbox, rsync, git** all go through the command hook, via `rclone` or the
+tool's own client:
 
 ```bash
-scp deploy/backup.sh root@host:/usr/local/bin/todont-backup
-ssh root@host 'chmod +x /usr/local/bin/todont-backup'
-# then nightly, via /etc/cron.d
-17 3 * * * root /usr/local/bin/todont-backup >> /var/log/todont-backup.log 2>&1
+rclone copy "$BACKUP_FILE" gdrive:todont-backups/
+rsync -a "$BACKUP_FILE" backup@nas:/vol/todont/
 ```
 
-A live SQLite file cannot simply be copied — a write mid-copy leaves a torn database that
-restores to nothing — so it uses `.backup` or `VACUUM INTO` to take a consistent snapshot
-while the server keeps serving. If the host has no `sqlite3`, it borrows the one inside
-the container.
+The tool has to exist inside the container, and by default only `tar`, `gzip` and `curl`
+do — add it in your own image layer. The hook is off by default on purpose: administering
+a board is not meant to be the same thing as having a shell on the server, and this makes
+it so.
 
-Restoring is `tar -xzf` into `STATE_DIR`. `KEEP` archives are retained, 14 by default.
+`COOKIE_SECRET` is **not** in the archive, because it is not in the database — it lives in
+the environment file. Losing it signs everyone out. Keep a copy of that separately.
 
-The env file is included because it holds `COOKIE_SECRET`, and losing that signs everyone
-out — which is also why the archive is written private.
-
-**These land next to the data by default.** That covers deleting the wrong thing; it does
-not cover losing the machine. Copy them somewhere else if the board matters.
+`deploy/backup.sh` still exists for taking one from the host, outside the app, and needs
+no admin account. It is redundant if you have the panel configured.
 
 State that is not in git and must be backed up:
 

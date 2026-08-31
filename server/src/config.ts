@@ -77,6 +77,15 @@ export const config = {
    */
   requireVerifiedEmail: env('REQUIRE_VERIFIED_EMAIL', 'false') === 'true',
 
+  /**
+   * Let a backup hand the archive to a shell command.
+   *
+   * Off by default and deliberately not a panel setting: being an admin of the
+   * tracker is not the same as having a shell on the machine it runs on, and
+   * this would silently make it so. The operator opts in.
+   */
+  backupAllowCommand: env('BACKUP_ALLOW_COMMAND', 'false') === 'true',
+
   /** ezmuze central. Constants, not settings — see ezmuze-studio docs/services-design.md §2. */
   central: {
     api: 'https://api.ezmuze.co.uk/',

@@ -4,6 +4,7 @@ import type { AdminColumn, AdminUser, BoardSettings } from '../types';
 import { EnvironmentsTab, TypesTab } from './AdminCatalog';
 import { EmailTab, SignInTab, UploadsFields } from './AdminInstance';
 import { TokensTab } from './AdminTokens';
+import { BackupsTab } from './AdminBackups';
 
 type Tab =
   | 'board'
@@ -13,7 +14,8 @@ type Tab =
   | 'signin'
   | 'email'
   | 'users'
-  | 'tokens';
+  | 'tokens'
+  | 'backups';
 
 /**
  * Everything an instance owner needs and nobody else should have: the board's
@@ -67,6 +69,7 @@ export function Admin({
               'email',
               'users',
               'tokens',
+              'backups',
             ] as Tab[]
           ).map((t) => (
             <button
@@ -87,6 +90,7 @@ export function Admin({
                   email: 'Email',
                   users: 'Users',
                   tokens: 'API tokens',
+                  backups: 'Backups',
                 }[t]
               }
             </button>
@@ -103,6 +107,7 @@ export function Admin({
           {tab === 'environments' ? <EnvironmentsTab busy={busy} run={run} /> : null}
           {tab === 'users' ? <UsersTab meId={meId} busy={busy} run={run} /> : null}
           {tab === 'tokens' ? <TokensTab busy={busy} run={run} /> : null}
+          {tab === 'backups' ? <BackupsTab busy={busy} run={run} /> : null}
         </div>
       </div>
     </div>

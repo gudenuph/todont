@@ -1,5 +1,7 @@
 import type {
   AdminColumn,
+  BackupReport,
+  BackupStatus,
   ApiToken,
   AdminEnvironment,
   AdminKind,
@@ -220,6 +222,16 @@ export const api = {
       method: 'POST',
       body: json({ to }),
     }),
+
+  backups: () => call<BackupStatus>('/api/admin/backups'),
+
+  runBackup: () => call<{ report: BackupReport }>('/api/admin/backups/run', { method: 'POST' }),
+
+  rescheduleBackups: () =>
+    call<{ nextRunAt: string | null }>('/api/admin/backups/reschedule', { method: 'POST' }),
+
+  deleteBackup: (name: string) =>
+    call<{ ok: true }>(`/api/admin/backups/${encodeURIComponent(name)}`, { method: 'DELETE' }),
 
   adminColumns: () => call<{ columns: AdminColumn[] }>('/api/admin/columns'),
 

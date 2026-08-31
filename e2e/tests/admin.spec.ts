@@ -100,3 +100,50 @@ test('a token is minted from the panel and shown exactly once', async ({ adminPa
   await expect(page.locator('.table')).toContainText('a-test-token');
   await expect(page.locator('.modal-body')).not.toContainText(secret!);
 });
+
+test('a backup is taken from the panel and offered for download', async ({
+  adminPage: page,
+  api,
+}) => {
+  await raise(api, { title: 'Ought to survive' });
+
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Admin' }).click();
+  await page.locator('.tab', { hasText: 'Backups' }).click();
+
+  await expect(page.locator('#bk-freq')).toHaveValue('off');
+  await expect(page.locator('.modal-body')).toContainText('None yet.');
+
+  await page.getByRole('button', { name: 'Back up now' }).click();
+
+  // The button reports what actually happened, not that it was clicked.
+  await expect(page.locator('.modal-body')).toContainText(/Done —/, { timeout: 30_000 });
+
+  const archive = page.locator('.table a[download]').first();
+  await expect(archive).toContainText(/^full-.*\.tar\.gz$/);
+
+  // and it is really there to fetch, at the size the row claims
+  const href = await archive.getAttribute('href');
+  const res = await page.request.get(href!);
+  expect(res.status()).toBe(200);
+  expect((await res.body()).length).toBeGreaterThan(1000);
+});
+
+test('a schedule set in the panel survives a reload and names its next run', async ({
+  adminPage: page,
+}) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Admin' }).click();
+  await page.locator('.tab', { hasText: 'Backups' }).click();
+
+  await page.locator('#bk-freq').selectOption('daily');
+  await expect(page.locator('.modal-body')).not.toContainText('Next run: never');
+
+  await page.reload();
+  await page.getByRole('button', { name: 'Admin' }).click();
+  await page.locator('.tab', { hasText: 'Backups' }).click();
+  await expect(page.locator('#bk-freq')).toHaveValue('daily');
+
+  await page.locator('#bk-freq').selectOption('off');
+  await expect(page.locator('.modal-body')).toContainText('Next run: never');
+});

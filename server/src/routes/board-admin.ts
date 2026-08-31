@@ -3,6 +3,7 @@ import { db } from '../db.js';
 import { HttpError, requireScope } from '../auth/identity.js';
 import { mailEnabled, resetMailer, sendMail } from '../lib/mailer.js';
 import { readableSettings, writeSettings } from '../lib/settings.js';
+import { scheduleBackups } from '../lib/backup.js';
 import {
   boardSettings,
   invalidateColumns,
@@ -234,6 +235,11 @@ export async function boardAdminRoutes(app: FastifyInstance): Promise<void> {
 
     writeSettings(req.body ?? {}, { actingProvider });
     resetMailer();
+
+    // A new frequency or hour should take effect now, not at the next restart.
+    if (Object.keys(req.body ?? {}).some((k) => k.startsWith('backup.'))) {
+      scheduleBackups(app.log);
+    }
 
     return { settings: readableSettings() };
   });

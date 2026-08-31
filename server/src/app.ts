@@ -20,6 +20,8 @@ import { catalogAdminRoutes } from './routes/catalog-admin.js';
 import { versionRoutes, listVersions, serializeVersion, defaultVersion } from './routes/versions.js';
 import { stackTraceRoutes } from './routes/stacktraces.js';
 import { draftRoutes } from './routes/drafts.js';
+import { backupAdminRoutes } from './routes/backup-admin.js';
+import { scheduleBackups, stopBackups } from './lib/backup.js';
 
 export interface BuildOptions {
   /**
@@ -128,6 +130,7 @@ export async function buildApp(options: BuildOptions = {}): Promise<FastifyInsta
   await app.register(versionRoutes);
   await app.register(stackTraceRoutes);
   await app.register(draftRoutes);
+  await app.register(backupAdminRoutes);
 
   // ---------------------------------------------------------------- the SPA
 
@@ -152,7 +155,15 @@ export async function buildApp(options: BuildOptions = {}): Promise<FastifyInsta
   pruneExpired();
   const pruneTimer = setInterval(pruneExpired, 15 * 60 * 1000);
   pruneTimer.unref();
-  app.addHook('onClose', async () => clearInterval(pruneTimer));
+
+  // Backups schedule themselves, so an operator who can only reach a web page
+  // can still arrange for the data to outlive the machine.
+  scheduleBackups(app.log);
+
+  app.addHook('onClose', async () => {
+    clearInterval(pruneTimer);
+    stopBackups();
+  });
 
   return app;
 }

@@ -211,3 +211,21 @@ export interface Session {
   scopes?: string[];
   via?: 'session' | 'token';
 }
+
+/** What one backup run actually managed to do. */
+export interface BackupReport {
+  at: string;
+  ok: boolean;
+  bytes: number;
+  file: string;
+  includedUploads: boolean;
+  delivered: string[];
+  failed: Array<{ where: string; why: string }>;
+}
+
+export interface BackupStatus {
+  lastRun: BackupReport | null;
+  nextRunAt: string | null;
+  archives: Array<{ name: string; bytes: number }>;
+  commandAllowed: boolean;
+}

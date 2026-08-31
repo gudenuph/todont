@@ -50,6 +50,8 @@ export interface Mail {
   to: string;
   subject: string;
   text: string;
+  /** Used by backups; nothing else attaches anything. */
+  attachments?: Array<{ filename: string; content: Buffer }>;
 }
 
 /**
@@ -68,7 +70,10 @@ export async function sendMail(
       warned = true;
       log.warn({}, 'SMTP is not configured — mail is being logged instead of sent');
     }
-    log.info({ to: mail.to, subject: mail.subject, body: mail.text }, 'mail (not sent)');
+    log.info(
+      { to: mail.to, subject: mail.subject, body: mail.attachments ? '<attachment>' : mail.text },
+      'mail (not sent)',
+    );
     return false;
   }
 
@@ -78,6 +83,7 @@ export async function sendMail(
       to: mail.to,
       subject: mail.subject,
       text: mail.text,
+      attachments: mail.attachments,
     });
     log.info({ to: mail.to, subject: mail.subject }, 'mail sent');
     return true;
