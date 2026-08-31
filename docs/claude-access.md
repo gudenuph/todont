@@ -96,8 +96,23 @@ The full endpoint list is in the main README.
 | `merge_bugs` / `unmerge_bug` | mark a duplicate, or split it back out |
 | `assign_bug` | set or clear the assignee |
 | `block_bug` / `unblock_bug` | "this cannot start until that is done"; loops are refused |
-| `comment_bug` | add to the thread |
+| `comment_bug` | add to the thread, with images by path if you have any |
 | `delete_bug` / `delete_comment` / `delete_attachment` | permanent, no undo |
+
+**Images on a comment.** `comment_bug` takes an `images` array of paths to files on the
+machine Claude is running on, and posts them with the comment in one call:
+
+```
+comment_bug(id: 42, body: "Before and after the fix:", images: ["/tmp/before.png", "/tmp/after.png"])
+```
+
+An image on its own is a valid comment — `body` may be empty. PNG, JPEG, GIF, WebP,
+WebM and MP4 only, and the **file's bytes** are checked rather than its name, so
+something merely called `.png` is refused instead of being uploaded and served as an
+image. Every file is read and checked before any of it is sent, so one bad path in the
+list leaves nothing on the board.
+
+The board is world-readable. Do not attach anything that should not be.
 | `list_versions` | the versions reporters can pick |
 | `list_columns` | also returns the ticket types and each one's scale, which an instance can change |
 | `list_assignable` | who a ticket can be assigned to |

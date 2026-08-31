@@ -8,6 +8,8 @@
  *   TRACKER_URL    default http://127.0.0.1:4310
  *   TRACKER_TOKEN  an API token with read,write,manage (server CLI: `token`)
  */
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
@@ -26,7 +28,10 @@ async function call(path: string, init: RequestInit = {}): Promise<unknown> {
     ...init,
     headers: {
       authorization: `Bearer ${TOKEN}`,
-      ...(init.body ? { 'content-type': 'application/json' } : {}),
+      // Only for a JSON body. FormData sets its own type and, crucially, its
+      // boundary — declaring JSON over it makes the server read the multipart
+      // envelope as a broken JSON document.
+      ...(typeof init.body === 'string' ? { 'content-type': 'application/json' } : {}),
       ...(init.headers ?? {}),
     },
   });
@@ -60,6 +65,72 @@ function fail(err: unknown) {
     content: [{ type: 'text' as const, text: `Error: ${err instanceof Error ? err.message : String(err)}` }],
     isError: true,
   };
+}
+
+/**
+ * What a file actually is, from its first bytes.
+ *
+ * The extension is not asked. This tool takes a path from a model and puts the
+ * contents on a world-readable board, so "it is called .png" is not good enough
+ * — the bytes have to agree. Anything that is not really an image or a
+ * recording is refused rather than uploaded and served as one.
+ */
+function sniff(buf: Buffer): string | null {
+  const starts = (...bytes: number[]) => bytes.every((b, i) => buf[i] === b);
+
+  if (starts(0x89, 0x50, 0x4e, 0x47)) return 'image/png';
+  if (starts(0xff, 0xd8, 0xff)) return 'image/jpeg';
+  if (buf.subarray(0, 4).toString('latin1') === 'GIF8') return 'image/gif';
+  if (starts(0x1a, 0x45, 0xdf, 0xa3)) return 'video/webm';
+  if (
+    buf.subarray(0, 4).toString('latin1') === 'RIFF' &&
+    buf.subarray(8, 12).toString('latin1') === 'WEBP'
+  ) {
+    return 'image/webp';
+  }
+  // MP4 and friends: a `ftyp` box, which does not start the file.
+  if (buf.subarray(4, 8).toString('latin1') === 'ftyp') return 'video/mp4';
+
+  return null;
+}
+
+/** The server's own ceiling is higher; this is a sane one for a tool call. */
+const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
+
+async function readImages(paths: string[]): Promise<Array<{ name: string; blob: Blob }>> {
+  return Promise.all(
+    paths.map(async (given) => {
+      const file = path.resolve(given);
+
+      let buf: Buffer;
+      try {
+        buf = await fs.readFile(file);
+      } catch {
+        throw new Error(`Cannot read ${given} — give a path to a file on this machine`);
+      }
+
+      if (buf.length > MAX_IMAGE_BYTES) {
+        throw new Error(
+          `${path.basename(file)} is ${Math.round(buf.length / 1024 / 1024)}MB, over the ${
+            MAX_IMAGE_BYTES / 1024 / 1024
+          }MB limit`,
+        );
+      }
+
+      const mime = sniff(buf);
+      if (!mime) {
+        throw new Error(
+          `${path.basename(file)} is not a PNG, JPEG, GIF, WebP, WebM or MP4 — ` +
+            'nothing else can go on a comment',
+        );
+      }
+
+      return {
+        name: path.basename(file),
+        blob: new Blob([new Uint8Array(buf)], { type: mime }),
+      };
+    }),
+  );
 }
 
 const server = new McpServer({ name: 'todont-tracker', version: '1.0.0' });
@@ -280,14 +351,41 @@ server.registerTool(
   'comment_bug',
   {
     title: 'Comment on a bug',
-    description: 'Add a comment to the bug’s thread, as whoever the token acts as.',
-    inputSchema: { id: z.number(), body: z.string() },
+    description:
+      'Add a comment to the bug’s thread, as whoever the token acts as. Images can be ' +
+      'attached by path — a screenshot, a chart, a before-and-after — and are posted with ' +
+      'the comment in one go. An image on its own is a valid comment.',
+    inputSchema: {
+      id: z.number(),
+      body: z.string().default('').describe('May be empty when images are attached'),
+      images: z
+        .array(z.string())
+        .optional()
+        .describe(
+          'Paths to image or video files on this machine (PNG, JPEG, GIF, WebP, WebM, MP4). ' +
+            'They are uploaded to a board anyone can read, so do not attach anything private.',
+        ),
+    },
   },
-  async ({ id, body }) => {
+  async ({ id, body, images }) => {
     try {
-      return reply(
-        await call(`/api/bugs/${id}/comments`, { method: 'POST', body: JSON.stringify({ body }) }),
-      );
+      if (!images?.length) {
+        if (!body.trim()) throw new Error('A comment needs either text or an image');
+        return reply(
+          await call(`/api/bugs/${id}/comments`, { method: 'POST', body: JSON.stringify({ body }) }),
+        );
+      }
+
+      // Read and check every file before sending any of it, so a bad path in
+      // the list does not leave half a comment on the board.
+      const files = await readImages(images);
+
+      const form = new FormData();
+      form.append('body', body);
+      for (const file of files) form.append('file', file.blob, file.name);
+
+      // No content-type header: fetch sets it, boundary and all.
+      return reply(await call(`/api/bugs/${id}/comments`, { method: 'POST', body: form }));
     } catch (err) {
       return fail(err);
     }
