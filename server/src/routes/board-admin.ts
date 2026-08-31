@@ -1,6 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { db } from '../db.js';
 import { HttpError, requireScope } from '../auth/identity.js';
+import { mailEnabled, resetMailer, sendMail } from '../lib/mailer.js';
+import { readableSettings, writeSettings } from '../lib/settings.js';
 import {
   boardSettings,
   invalidateColumns,
@@ -207,6 +209,71 @@ export async function boardAdminRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/admin/settings', async (req) => {
     requireScope(req, 'admin');
     return { settings: boardSettings() };
+  });
+
+  /**
+   * Instance policy: how people get in, how long a session lasts, what may be
+   * uploaded, and where mail goes. Everything here has an environment default
+   * and a database override; the panel writes the override.
+   */
+  app.get('/api/admin/instance', async (req) => {
+    requireScope(req, 'admin');
+    return { settings: readableSettings() };
+  });
+
+  app.patch<{ Body: Record<string, unknown> }>('/api/admin/instance', async (req) => {
+    const actor = requireScope(req, 'admin');
+
+    // Which door this admin came through, so they cannot bolt it behind them.
+    const actingProvider =
+      actor.via === 'session'
+        ? (db
+            .prepare(`SELECT provider FROM identities WHERE user_id = ? LIMIT 1`)
+            .get(actor.user.id) as { provider: string } | undefined)?.provider
+        : undefined;
+
+    writeSettings(req.body ?? {}, { actingProvider });
+    resetMailer();
+
+    return { settings: readableSettings() };
+  });
+
+  /**
+   * Prove the mail settings work, to the person who just typed them, before
+   * they find out from a user who never got a verification link.
+   */
+  app.post<{ Body: { to?: string } }>('/api/admin/instance/test-email', async (req) => {
+    const actor = requireScope(req, 'admin');
+    const to = (req.body?.to ?? actor.user.email ?? '').trim();
+
+    if (!to) throw new HttpError(400, 'Give an address to send the test to');
+    if (!mailEnabled()) {
+      throw new HttpError(400, 'Set a mail server and a from address first');
+    }
+
+    const board = boardSettings().name;
+    const sent = await sendMail(
+      {
+        to,
+        subject: `${board}: test message`,
+        text: [
+          'This is a test from the administration panel.',
+          '',
+          'If you are reading it, this instance can send mail — verification and',
+          'password reset links will reach people.',
+        ].join('\n'),
+      },
+      app.log,
+    );
+
+    if (!sent) {
+      throw new HttpError(
+        502,
+        'The mail server refused it. The container log has the reason.',
+      );
+    }
+
+    return { ok: true, to };
   });
 
   app.patch<{ Body: { name?: string; tagline?: string } }>(

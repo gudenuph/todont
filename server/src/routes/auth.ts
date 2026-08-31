@@ -18,6 +18,7 @@ import {
   userByEmail,
 } from '../auth/identity.js';
 import { config } from '../config.js';
+import { settingBool } from '../lib/settings.js';
 import { createHash, randomBytes } from 'node:crypto';
 import { mailEnabled, resetMail, sendMail, verificationMail } from '../lib/mailer.js';
 import {
@@ -66,7 +67,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   /** What the sign-in dialog should offer. */
   app.get('/api/auth/providers', async () => ({
     providers: enabledProviders(),
-    allowSignup: config.allowSignup && providerEnabled('local'),
+    allowSignup: settingBool('auth.allowSignup') && providerEnabled('local'),
   }));
 
   /**
@@ -84,7 +85,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       if (!providerEnabled('local')) {
         throw new HttpError(404, 'This tracker does not use email sign-in');
       }
-      if (!config.allowSignup) {
+      if (!settingBool('auth.allowSignup')) {
         throw new HttpError(403, 'This tracker is not open for new accounts');
       }
 
@@ -115,7 +116,11 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       app.log.info({ userId: user.id, role: user.role, verificationSent: sent }, 'local account created');
       return reply.code(201).send({
         user: publicUser(user),
-        verification: { sent, required: config.requireVerifiedEmail, mailEnabled: mailEnabled() },
+        verification: {
+          sent,
+          required: settingBool('auth.requireVerifiedEmail'),
+          mailEnabled: mailEnabled(),
+        },
       });
     },
   );
@@ -454,7 +459,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       // carries neither, because it is what everyone sees on a bug.
       email: user.email,
       emailVerified: user.email === null || user.email_verified_at !== null,
-      verificationRequired: config.requireVerifiedEmail,
+      verificationRequired: settingBool('auth.requireVerifiedEmail'),
     };
   });
 

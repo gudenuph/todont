@@ -195,6 +195,21 @@ export const api = {
       body: json(settings),
     }),
 
+  instanceSettings: () =>
+    call<{ settings: Record<string, unknown> }>('/api/admin/instance'),
+
+  updateInstanceSettings: (patch: Record<string, unknown>) =>
+    call<{ settings: Record<string, unknown> }>('/api/admin/instance', {
+      method: 'PATCH',
+      body: json(patch),
+    }),
+
+  testEmail: (to?: string) =>
+    call<{ ok: true; to: string }>('/api/admin/instance/test-email', {
+      method: 'POST',
+      body: json({ to }),
+    }),
+
   adminColumns: () => call<{ columns: AdminColumn[] }>('/api/admin/columns'),
 
   createColumn: (data: { label: string; color?: string }) =>

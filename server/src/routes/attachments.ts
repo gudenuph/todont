@@ -5,6 +5,7 @@ import { pipeline } from 'node:stream/promises';
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { config } from '../config.js';
+import { settingInt } from '../lib/settings.js';
 import { db, logEvent } from '../db.js';
 import { HttpError, canSeeStackTrace, requireScope, type Actor } from '../auth/identity.js';
 import { requireBug, serializeDetail } from '../lib/bugs.js';
@@ -101,11 +102,16 @@ export async function attachmentRoutes(app: FastifyInstance): Promise<void> {
 
     const saved: number[] = [];
 
-    for await (const part of req.parts()) {
+    // The parser's ceiling was fixed at boot; this is the instance's own limit
+    // within it, so lowering it in the admin panel takes effect immediately.
+    const maxBytes = settingInt('uploads.maxBytes');
+
+    for await (const part of req.parts({ limits: { fileSize: maxBytes } })) {
       if (part.type !== 'file') continue;
 
-      if (existing + saved.length >= config.maxUploadsPerBug) {
-        throw new HttpError(400, `A bug can hold at most ${config.maxUploadsPerBug} attachments`);
+      const maxPerBug = settingInt('uploads.maxPerBug');
+      if (existing + saved.length >= maxPerBug) {
+        throw new HttpError(400, `A bug can hold at most ${maxPerBug} attachments`);
       }
 
       const mime = (part.mimetype || '').toLowerCase();
@@ -128,7 +134,7 @@ export async function attachmentRoutes(app: FastifyInstance): Promise<void> {
         await fs.rm(target, { force: true });
         throw new HttpError(
           413,
-          `${part.filename || 'That file'} is larger than ${Math.round(config.maxUploadBytes / 1024 / 1024)}MB`,
+          `${part.filename || 'That file'} is larger than ${Math.round(maxBytes / 1024 / 1024)}MB`,
         );
       }
 

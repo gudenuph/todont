@@ -1,5 +1,5 @@
 import nodemailer, { type Transporter } from 'nodemailer';
-import { config } from '../config.js';
+import { settingBool, settingInt, settingText } from './settings.js';
 import { boardSettings } from './board.js';
 
 /**
@@ -20,18 +20,27 @@ let transporter: Transporter | null = null;
 let warned = false;
 
 export function mailEnabled(): boolean {
-  return config.smtp.host !== '' && config.smtp.from !== '';
+  return settingText('smtp.host') !== '' && settingText('smtp.from') !== '';
+}
+
+/** Settings changed: the next send builds a fresh connection. */
+export function resetMailer(): void {
+  transporter = null;
+  warned = false;
 }
 
 function getTransporter(): Transporter {
   if (!transporter) {
+    const user = settingText('smtp.user');
+    const port = settingInt('smtp.port');
+
     transporter = nodemailer.createTransport({
-      host: config.smtp.host,
-      port: config.smtp.port,
+      host: settingText('smtp.host'),
+      port,
       // Port 465 is implicit TLS; 587 starts plain and upgrades with STARTTLS.
-      secure: config.smtp.secure ?? config.smtp.port === 465,
-      auth: config.smtp.user ? { user: config.smtp.user, pass: config.smtp.pass } : undefined,
-      ...(config.smtp.allowInsecureTls ? { tls: { rejectUnauthorized: false } } : {}),
+      secure: port === 465,
+      auth: user ? { user, pass: settingText('smtp.pass') } : undefined,
+      ...(settingBool('smtp.allowInsecureTls') ? { tls: { rejectUnauthorized: false } } : {}),
     });
   }
   return transporter;
@@ -65,7 +74,7 @@ export async function sendMail(
 
   try {
     await getTransporter().sendMail({
-      from: config.smtp.from,
+      from: settingText('smtp.from'),
       to: mail.to,
       subject: mail.subject,
       text: mail.text,

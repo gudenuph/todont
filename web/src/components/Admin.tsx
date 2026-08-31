@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { api } from '../api';
 import type { AdminColumn, AdminUser, BoardSettings } from '../types';
 import { EnvironmentsTab, TypesTab } from './AdminCatalog';
+import { EmailTab, SignInTab, UploadsFields } from './AdminInstance';
 
-type Tab = 'board' | 'lanes' | 'types' | 'environments' | 'users';
+type Tab = 'board' | 'lanes' | 'types' | 'environments' | 'signin' | 'email' | 'users';
 
 /**
  * Everything an instance owner needs and nobody else should have: the board's
@@ -47,7 +48,7 @@ export function Admin({
         </div>
 
         <div className="tabs">
-          {(['board', 'lanes', 'types', 'environments', 'users'] as Tab[]).map((t) => (
+          {(['board', 'lanes', 'types', 'environments', 'signin', 'email', 'users'] as Tab[]).map((t) => (
             <button
               key={t}
               className={`tab${tab === t ? ' active' : ''}`}
@@ -56,15 +57,17 @@ export function Admin({
                 setError('');
               }}
             >
-              {t === 'board'
-                ? 'Board'
-                : t === 'lanes'
-                  ? 'Lanes'
-                  : t === 'types'
-                    ? 'Types'
-                    : t === 'environments'
-                      ? 'Environments'
-                      : 'Users'}
+              {
+                {
+                  board: 'Board',
+                  lanes: 'Lanes',
+                  types: 'Types',
+                  environments: 'Environments',
+                  signin: 'Sign-in',
+                  email: 'Email',
+                  users: 'Users',
+                }[t]
+              }
             </button>
           ))}
         </div>
@@ -74,6 +77,8 @@ export function Admin({
           {tab === 'board' ? <BoardTab busy={busy} run={run} /> : null}
           {tab === 'lanes' ? <LanesTab busy={busy} run={run} /> : null}
           {tab === 'types' ? <TypesTab busy={busy} run={run} /> : null}
+          {tab === 'signin' ? <SignInTab busy={busy} run={run} /> : null}
+          {tab === 'email' ? <EmailTab busy={busy} run={run} /> : null}
           {tab === 'environments' ? <EnvironmentsTab busy={busy} run={run} /> : null}
           {tab === 'users' ? <UsersTab meId={meId} busy={busy} run={run} /> : null}
         </div>
@@ -127,6 +132,9 @@ function BoardTab({ busy, run }: { busy: boolean; run: Runner }) {
           onChange={(e) => setSettings({ ...settings, tagline: e.target.value })}
         />
       </div>
+
+      <hr style={{ border: 0, borderTop: '1px solid var(--border-soft)', margin: '18px 0' }} />
+      <UploadsFields busy={busy} run={run} />
 
       <button
         className="btn primary"

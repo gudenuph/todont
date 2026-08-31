@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { config } from '../config.js';
+import { settingBool, settingInt, settingList } from '../lib/settings.js';
 import { db, type UserRow } from '../db.js';
 
 export const SESSION_COOKIE = 'todont_session';
@@ -169,7 +170,7 @@ export function createSession(userId: number, authKey: string | null): string {
   db.prepare(
     `INSERT INTO sessions (id, user_id, auth_key, expires_at)
      VALUES (?, ?, ?, datetime('now', ?))`,
-  ).run(sid, userId, authKey, `+${config.sessionDays} days`);
+  ).run(sid, userId, authKey, `+${settingInt('session.days')} days`);
   return sid;
 }
 
@@ -183,7 +184,7 @@ export function setSessionCookie(reply: FastifyReply, sid: string): void {
     httpOnly: true,
     sameSite: 'lax',
     secure: config.cookieSecure,
-    maxAge: config.sessionDays * 24 * 60 * 60,
+    maxAge: settingInt('session.days') * 24 * 60 * 60,
     signed: true,
   });
 }
@@ -362,7 +363,7 @@ export function publicUser(u: UserRow | null | undefined) {
  * its provider — and only when the instance asks for verification at all.
  */
 export function needsEmailVerification(user: UserRow): boolean {
-  if (!config.requireVerifiedEmail) return false;
+  if (!settingBool('auth.requireVerifiedEmail')) return false;
   if (user.is_bot === 1) return false;
   if (!user.password_hash) return false;
   return user.email_verified_at === null;
@@ -370,7 +371,7 @@ export function needsEmailVerification(user: UserRow): boolean {
 
 /** Which ways in this instance offers, for the sign-in dialog to render. */
 export function enabledProviders(): string[] {
-  return config.authProviders.filter((p) => p === 'local' || p === 'ezmuze');
+  return settingList('auth.providers').filter((p) => p === 'local' || p === 'ezmuze');
 }
 
 export function providerEnabled(provider: string): boolean {

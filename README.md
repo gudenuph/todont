@@ -107,6 +107,32 @@ Rules the admin routes enforce, so the board cannot be broken from the panel:
 
 The board's name and tagline are settings too, on the same dialog.
 
+### Settings: environment, then panel
+
+Anything that is **policy** can be changed from the Admin dialog while the server runs —
+the environment supplies the starting value, a row in `settings` overrides it:
+
+| | |
+|---|---|
+| Sign-in | which providers are on, whether anyone may sign up, whether an address must be confirmed, how long a session lasts |
+| Email | SMTP server, port, credentials, from address — with a **send a test** button, so you find out it works before a user finds out it does not |
+| Board | name, tagline, largest attachment, attachments per ticket |
+
+Anything needed to **reach** the database or the site stays in the environment: `PORT`,
+`HOST`, `DATA_DIR`, `PUBLIC_URL`, `COOKIE_SECRET`, `COOKIE_SECURE`, `SERVE_WEB`. Getting
+one of those wrong from a web form would lock everybody out of the web form.
+
+Two guards worth knowing, because both are the kind of mistake you only make once:
+
+- **You cannot switch off the way you signed in.** Doing so would lock you out of the
+  page you are standing on. At least one provider must stay enabled regardless.
+- **The attachment limit can be lowered but not raised past what the server started
+  with**, because the upload parser's ceiling is fixed at boot. Raising it needs a
+  restart, and the panel says so.
+
+A saved SMTP password is never handed back out, not even to the admin who typed it —
+sending an empty one means "leave it alone" rather than "clear it".
+
 **Dragging.** Drop a card on a column to move it there; the position within the column
 is kept, so a column can be ordered by priority. Drop a card on the **middle** of
 another card to merge the two as duplicates — the card you dragged leaves the board and
