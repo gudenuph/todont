@@ -628,6 +628,32 @@ The proxy host entry in Nginx Proxy Manager (admin UI on port 8181):
 | Websockets | on |
 | SSL | request a new Let's Encrypt certificate, force SSL |
 
+### Backups
+
+`deploy/backup.sh` snapshots the database, the uploads and the env file into one tarball,
+then **reads the database back out of the archive to prove it restores** — an unverified
+backup is a guess.
+
+```bash
+scp deploy/backup.sh root@host:/usr/local/bin/todont-backup
+ssh root@host 'chmod +x /usr/local/bin/todont-backup'
+# then nightly, via /etc/cron.d
+17 3 * * * root /usr/local/bin/todont-backup >> /var/log/todont-backup.log 2>&1
+```
+
+A live SQLite file cannot simply be copied — a write mid-copy leaves a torn database that
+restores to nothing — so it uses `.backup` or `VACUUM INTO` to take a consistent snapshot
+while the server keeps serving. If the host has no `sqlite3`, it borrows the one inside
+the container.
+
+Restoring is `tar -xzf` into `STATE_DIR`. `KEEP` archives are retained, 14 by default.
+
+The env file is included because it holds `COOKIE_SECRET`, and losing that signs everyone
+out — which is also why the archive is written private.
+
+**These land next to the data by default.** That covers deleting the wrong thing; it does
+not cover losing the machine. Copy them somewhere else if the board matters.
+
 State that is not in git and must be backed up:
 
 ```
