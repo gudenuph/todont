@@ -1,0 +1,33 @@
+# HTTPS, for an instance with its own domain and nothing already on 80/443.
+#
+#   SITE_ADDRESS=bugs.example.com \
+#     docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d
+#
+# Caddy obtains and renews a Let's Encrypt certificate on its own — no certbot,
+# no cron, no renewal you have to remember. Point the domain's A record at this
+# machine first, or the challenge cannot complete.
+#
+# Skip this file entirely if you already run a reverse proxy; just point it at
+# the tracker's published port.
+version: "3.7"
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: ${CONTAINER_NAME:-todont-tracker}-caddy
+    restart: unless-stopped
+    depends_on:
+      - tracker
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?set SITE_ADDRESS to your domain}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

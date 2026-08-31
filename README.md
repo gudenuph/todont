@@ -9,6 +9,31 @@ token-authenticated REST API.
 
 **MIT licensed.** See [LICENSE](LICENSE).
 
+## Quickstart
+
+```bash
+git clone <this repo> && cd ToDontTracker
+cp .env.example .env          # set PUBLIC_URL and COOKIE_SECRET
+docker compose up -d          # http://localhost:4310
+```
+
+The first account you create becomes the admin. From the **Admin** dialog you can rename
+the board, reshape its lanes, and change what a ticket even is.
+
+For HTTPS on your own domain, with certificates obtained and renewed for you:
+
+```bash
+SITE_ADDRESS=bugs.example.com   docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d
+```
+
+Set `PUBLIC_URL=https://bugs.example.com` and `COOKIE_SECURE=true` in `.env` at the same
+time — with `COOKIE_SECURE` on and a plain-http address, the browser will not send the
+session cookie and signing in will appear to fail for no reason.
+
+Already running a reverse proxy? Skip the TLS file and point yours at the published port.
+
+State lives in `./data` (or wherever `DATA_DIR` says) and is the only thing to back up.
+
 ```
 web/     React + Vite single-page board (TypeScript)
 server/  Fastify API + SQLite, and it serves the built SPA in production
@@ -489,6 +514,26 @@ The token is printed once and stored hashed. Put it in your environment as
 `TODONT_TOKEN` and `.mcp.json` picks it up.
 
 ---
+
+## Contributing
+
+```bash
+npm install
+npm test          # builds, then runs the suite
+npm run dev       # API on 4310, Vite on 5173
+```
+
+CI runs the same `npm run build` and `npm test` on every push and pull request, and
+separately proves the Docker image still builds — so a broken image is found on the
+change that broke it rather than at release time.
+
+Tests live beside what they test (`*.test.ts`) and use Node's own test runner; there is
+no framework to learn. Integration tests drive the real app through Fastify's
+`inject()`, so they exercise routes, hooks and auth without binding a port — see
+`server/src/test/harness.ts`, which stands a whole tracker up on a throwaway database.
+
+Tagging a version (`git tag v1.0.0 && git push --tags`) publishes a multi-architecture
+image to GHCR.
 
 ## Running it locally
 

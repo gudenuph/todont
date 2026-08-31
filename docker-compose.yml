@@ -1,19 +1,30 @@
-# Follows the conventions already on the host: state under $STATE_DIR,
-# published on the docker bridge address so Nginx Proxy Manager can reach it
-# while the port stays off the public interface.
+# Runs the tracker from source. Everything is a variable with a sensible
+# default, so `docker compose up -d` works on a clean checkout and an existing
+# instance overrides only what it needs.
+#
+#   cp .env.example .env    # then edit PUBLIC_URL and COOKIE_SECRET
+#   docker compose up -d    # http://localhost:4310
+#
+# For HTTPS on your own domain, add the Caddy front:
+#   docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d
 version: "3.7"
 
 services:
   tracker:
     build: .
-    image: todont-tracker:latest
-    container_name: todont-tracker
+    image: ${IMAGE:-todont-tracker:latest}
+    container_name: ${CONTAINER_NAME:-todont-tracker}
     restart: unless-stopped
+
+    # An instance whose settings live outside the checkout points at them here.
     env_file:
-      - $STATE_DIR/tracker.env
+      - ${ENV_FILE:-./.env}
+
+    # Defaults to loopback: the app speaks plain HTTP and expects something in
+    # front of it to terminate TLS. Set BIND_ADDR to reach it from elsewhere.
     ports:
-      # 172.17.0.1 is the docker0 gateway — reachable from the proxy container
-      # and from the host, never from the internet.
-      - "172.17.0.1:4310:4310"
+      - "${BIND_ADDR:-127.0.0.1}:${HOST_PORT:-4310}:4310"
+
+    # The database, the uploads, and nothing else worth keeping.
     volumes:
-      - $STATE_DIR/data:/data
+      - ${DATA_DIR:-./data}:/data

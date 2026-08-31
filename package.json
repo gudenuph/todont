@@ -17,7 +17,9 @@
     "dev:web": "npm run dev --workspace web",
     "build": "npm run build --workspace server && npm run build --workspace web && npm run build --workspace mcp",
     "start": "node server/dist/index.js",
-    "cli": "node server/dist/cli.js"
+    "cli": "node server/dist/cli.js",
+    "test": "npm run build --workspace server && node --test \"server/dist/**/*.test.js\"",
+    "test:watch": "node --test --watch \"server/dist/**/*.test.js\""
   },
   "allowScripts": {
     "better-sqlite3@12.11.1": true,

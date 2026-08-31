@@ -332,6 +332,17 @@ db.prepare(
   `INSERT OR IGNORE INTO versions (name, released_at, is_unreleased) VALUES (?, NULL, 1)`,
 ).run(UNRELEASED_VERSION);
 
+/**
+ * Release the database file.
+ *
+ * Only tests need this: the process exiting is enough in production, but
+ * Windows will not delete a file that is still open, so a temporary database
+ * has to be closed before it can be cleaned up.
+ */
+export function closeDb(): void {
+  if (db.open) db.close();
+}
+
 /** Clear out handshakes and sessions nobody finished. */
 export function pruneExpired(): void {
   db.prepare(`DELETE FROM auth_requests WHERE expires_at < datetime('now')`).run();

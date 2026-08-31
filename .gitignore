@@ -9,3 +9,6 @@ uploads/
 *.db-journal
 *.db-wal
 *.db-shm
+
+# An instance's own deployment values
+deploy/.env.local

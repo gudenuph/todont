@@ -1,0 +1,11 @@
+# Terminates TLS and hands everything to the tracker.
+{$SITE_ADDRESS} {
+	encode gzip
+
+	# Screen recordings can be 50MB; the app enforces its own limit above this.
+	request_body {
+		max_size 64MB
+	}
+
+	reverse_proxy tracker:4310
+}
