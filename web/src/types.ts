@@ -52,6 +52,16 @@ export interface AdminColumn {
   bugCount: number;
 }
 
+export interface ApiToken {
+  id: number;
+  name: string;
+  scopes: string[];
+  actsAs: { id: number; name: string; role: string };
+  createdAt: string;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+}
+
 export interface AdminEnvironment {
   id: number;
   label: string;

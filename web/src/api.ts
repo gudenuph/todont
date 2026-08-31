@@ -1,5 +1,6 @@
 import type {
   AdminColumn,
+  ApiToken,
   AdminEnvironment,
   AdminKind,
   AuthOptions,
@@ -194,6 +195,16 @@ export const api = {
       method: 'PATCH',
       body: json(settings),
     }),
+
+  tokens: () => call<{ tokens: ApiToken[] }>('/api/tokens'),
+
+  createToken: (data: { name: string; scopes: string[]; botName?: string; botRole?: string }) =>
+    call<{ token: string; name: string; scopes: string[] }>('/api/tokens', {
+      method: 'POST',
+      body: json(data),
+    }),
+
+  revokeToken: (id: number) => call<{ ok: true }>(`/api/tokens/${id}`, { method: 'DELETE' }),
 
   instanceSettings: () =>
     call<{ settings: Record<string, unknown> }>('/api/admin/instance'),

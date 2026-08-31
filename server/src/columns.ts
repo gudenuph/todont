@@ -68,7 +68,7 @@ export interface ItemKind {
 /** One step on a kind's scale. The colour is the strip down the left of a card. */
 export interface Level {
   key: string;
-  /** The full wording, for the picker: "I can't use ezmuze without this". */
+  /** The full wording, for the picker: "I can't use it without this". */
   label: string;
   /** A card footer is a few characters wide; the full wording will not fit. */
   short: string;
@@ -110,7 +110,7 @@ export const SEED_KINDS: ItemKind[] = [
       titlePlaceholder: 'What you would like, in one line',
     },
     levels: [
-      { key: 'blocking', label: "I can't use ezmuze without this", short: 'Blocking', color: '#ff5a5a' },
+      { key: 'blocking', label: "I can't use it without this", short: 'Blocking', color: '#ff5a5a' },
       { key: 'important', label: 'It would make a big difference', short: 'Big deal', color: '#e68c32' },
       { key: 'want', label: 'Kinda want it', short: 'Kinda want', color: '#6e8ca8' },
       { key: 'idea', label: 'Just an idea', short: 'Idea', color: '#4e4e5e' },

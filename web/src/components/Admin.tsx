@@ -3,8 +3,17 @@ import { api } from '../api';
 import type { AdminColumn, AdminUser, BoardSettings } from '../types';
 import { EnvironmentsTab, TypesTab } from './AdminCatalog';
 import { EmailTab, SignInTab, UploadsFields } from './AdminInstance';
+import { TokensTab } from './AdminTokens';
 
-type Tab = 'board' | 'lanes' | 'types' | 'environments' | 'signin' | 'email' | 'users';
+type Tab =
+  | 'board'
+  | 'lanes'
+  | 'types'
+  | 'environments'
+  | 'signin'
+  | 'email'
+  | 'users'
+  | 'tokens';
 
 /**
  * Everything an instance owner needs and nobody else should have: the board's
@@ -48,7 +57,18 @@ export function Admin({
         </div>
 
         <div className="tabs">
-          {(['board', 'lanes', 'types', 'environments', 'signin', 'email', 'users'] as Tab[]).map((t) => (
+          {(
+            [
+              'board',
+              'lanes',
+              'types',
+              'environments',
+              'signin',
+              'email',
+              'users',
+              'tokens',
+            ] as Tab[]
+          ).map((t) => (
             <button
               key={t}
               className={`tab${tab === t ? ' active' : ''}`}
@@ -66,6 +86,7 @@ export function Admin({
                   signin: 'Sign-in',
                   email: 'Email',
                   users: 'Users',
+                  tokens: 'API tokens',
                 }[t]
               }
             </button>
@@ -81,6 +102,7 @@ export function Admin({
           {tab === 'email' ? <EmailTab busy={busy} run={run} /> : null}
           {tab === 'environments' ? <EnvironmentsTab busy={busy} run={run} /> : null}
           {tab === 'users' ? <UsersTab meId={meId} busy={busy} run={run} /> : null}
+          {tab === 'tokens' ? <TokensTab busy={busy} run={run} /> : null}
         </div>
       </div>
     </div>

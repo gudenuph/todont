@@ -73,7 +73,7 @@ same question and drives the same colour strip:
 | | most pressing → least |
 |---|---|
 | bug | Critical · Major · Minor · Trivial |
-| feature | I can't use ezmuze without this · It would make a big difference · Kinda want it · Just an idea |
+| feature | I can't use it without this · It would make a big difference · Kinda want it · Just an idea |
 
 The scales are parallel, so **retyping a ticket carries the level across by position** —
 a critical bug becomes a blocking request, not a reset to the default. The API validates

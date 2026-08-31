@@ -1408,3 +1408,27 @@ label.check {
 .field > label.check {
   margin-bottom: 5px;
 }
+
+/* The one moment a token is visible; it is never shown again. */
+.token-reveal {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.token-reveal code {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+  background: var(--backdrop);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 7px 10px;
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-size: 12px;
+  color: var(--text);
+  user-select: all;
+}

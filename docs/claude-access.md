@@ -3,24 +3,35 @@
 Everything Claude needs to read the queue at https://bugs.ezmuze.studio, pick work up,
 move it along and keep tickets updated.
 
-## The credential
+## Getting a token
 
-```
-TODONT_TOKEN=ezb_your_token_here
-```
+**Admin → API tokens → New token.** Name it, choose what it may do, and press create. The
+token is shown once and stored hashed; there is no way to read it back, so copy it then.
 
-It acts as the user **Claude** (a bot account, role `manager`), so everything it does is
-attributed on the board like anyone else's work — comments say "Claude", moves show up in
-the activity trail.
+For working the board, the useful shape is:
 
-Stored hashed server-side, so this file is the only copy. To replace it:
+| | |
+|---|---|
+| What is it for | `claude` |
+| Show on the board as | `Claude` |
+| Allowed to | Read, Raise and comment, Move/merge/assign/delete |
+| Role | manager |
+
+That is `read,write,manage` — enough to triage and update tickets, and deliberately not
+enough to manage users, mint tokens or register a release.
+
+If the panel is unreachable, the CLI does the same thing:
 
 ```bash
-ssh root@your-host 'docker exec todont-tracker node server/dist/cli.js tokens'
-ssh root@your-host 'docker exec todont-tracker node server/dist/cli.js revoke <id>'
-ssh root@your-host 'docker exec todont-tracker node server/dist/cli.js \
-  token "claude" --scopes read,write,manage --bot-name "Claude" --role manager'
+docker exec todont-tracker node server/dist/cli.js   token "claude" --scopes read,write,manage --bot-name "Claude" --role manager
 ```
+
+A token acts as a bot account, so everything it does is attributed on the board like
+anyone else's work — comments say "Claude", moves appear in the activity trail — and
+revoking it leaves that history intact.
+
+**Do not commit the token.** Put it in the environment as `TODONT_TOKEN`, which is what
+`.mcp.json` reads.
 
 ## Setup — in this repo
 
