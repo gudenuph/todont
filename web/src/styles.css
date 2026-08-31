@@ -1368,21 +1368,43 @@ textarea.mono,
 .checks {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px 16px;
+  gap: 6px 22px;
 }
 
-.check {
+/*
+ * `.field label` sets display:block and outranks a bare `.check`, which
+ * collapsed the flex gap and pushed every box against its own text. Matching
+ * the element as well as the class settles it.
+ */
+.field label.check,
+label.check {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
+  gap: 9px;
+  font-size: 13px;
   color: var(--text-dim);
   cursor: pointer;
   margin: 0;
+  /* A tick is small; give the whole row a target worth aiming at. */
+  padding: 3px 0;
+  line-height: 1.35;
+}
+
+.field label.check:hover {
+  color: var(--text);
 }
 
 .check input {
   accent-color: var(--accent);
   margin: 0;
   cursor: pointer;
+  /* Keeps the box from shrinking when the label wraps onto two lines. */
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+}
+
+/* A checkbox that is the whole field wants the same room a label would have. */
+.field > label.check {
+  margin-bottom: 5px;
 }
