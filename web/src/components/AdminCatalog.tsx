@@ -37,31 +37,28 @@ export function TypesTab({ busy, run }: { busy: boolean; run: Runner }) {
       {kinds.map((kind) => (
         <div className="kind-card" key={kind.id}>
           <div className="kind-head">
+            {/* Uncontrolled, so blur can tell the typed value from the saved one. */}
             <input
+              key={`${kind.id}:emoji:${kind.emoji}`}
               className="kind-emoji-input"
-              value={kind.emoji}
+              defaultValue={kind.emoji}
               disabled={busy}
               aria-label={`Emoji for ${kind.label}`}
-              onChange={(e) =>
-                setKinds(kinds.map((k) => (k.id === kind.id ? { ...k, emoji: e.target.value } : k)))
-              }
               onBlur={(e) =>
-                e.target.value.trim() && e.target.value !== kind.emoji
+                e.target.value.trim() && e.target.value.trim() !== kind.emoji
                   ? void save(() => api.updateKind(kind.id, { emoji: e.target.value.trim() }))
                   : undefined
               }
             />
             <input
+              key={`${kind.id}:label:${kind.label}`}
               type="text"
-              value={kind.label}
+              defaultValue={kind.label}
               disabled={busy}
-              aria-label={`Name of ${kind.label}`}
-              onChange={(e) =>
-                setKinds(kinds.map((k) => (k.id === kind.id ? { ...k, label: e.target.value } : k)))
-              }
+              aria-label="Type name"
               onBlur={(e) => {
                 const label = e.target.value.trim();
-                if (label) void save(() => api.updateKind(kind.id, { label }));
+                if (label && label !== kind.label) void save(() => api.updateKind(kind.id, { label }));
               }}
             />
             <span className="lane-key">{kind.key}</span>

@@ -545,7 +545,8 @@ The token is printed once and stored hashed. Put it in your environment as
 
 ```bash
 npm install
-npm test          # builds, then runs the suite
+npm test          # builds, then runs the server suite
+npm run test:e2e  # and the browser one
 npm run dev       # API on 4310, Vite on 5173
 ```
 
@@ -553,10 +554,20 @@ CI runs the same `npm run build` and `npm test` on every push and pull request, 
 separately proves the Docker image still builds — so a broken image is found on the
 change that broke it rather than at release time.
 
-Tests live beside what they test (`*.test.ts`) and use Node's own test runner; there is
-no framework to learn. Integration tests drive the real app through Fastify's
+**Server tests** live beside what they test (`*.test.ts`) and use Node's own test runner;
+there is no framework to learn. Integration tests drive the real app through Fastify's
 `inject()`, so they exercise routes, hooks and auth without binding a port — see
 `server/src/test/harness.ts`, which stands a whole tracker up on a throwaway database.
+
+**Browser tests** are in `e2e/`, and exist for what no server test can reach: dragging a
+card between lanes, the band that separates "merge with this" from "drop between these",
+and the dimming that answers "what is this waiting on?". All three are computed from live
+layout, so jsdom — which reports every element as zero by zero — cannot test them at all.
+They run against the built app on a throwaway database, one lane of traffic, no mocking.
+
+Where a browser test could be pixel-hunting, it asserts on the app's own decision instead:
+the drag helper reports whether the app was going to merge at the moment of release, so a
+three-pixel layout shift cannot make a green test go red.
 
 Tagging a version (`git tag v1.0.0 && git push --tags`) publishes a multi-architecture
 image to GHCR.

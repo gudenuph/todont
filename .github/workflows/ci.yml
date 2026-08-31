@@ -31,6 +31,21 @@ jobs:
       - name: Test
         run: npm test
 
+      # The browser tests cover what no server test can reach: dragging a card,
+      # the merge band, and the dimming that answers "what is this waiting on?"
+      - name: Install a browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser tests
+        run: npx playwright test -c e2e/playwright.config.ts
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          retention-days: 7
+
   # Proves the published image actually builds, on every change rather than
   # only when a release is tagged and it is too late to find out.
   image:

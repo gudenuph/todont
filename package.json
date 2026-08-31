@@ -19,11 +19,15 @@
     "start": "node server/dist/index.js",
     "cli": "node server/dist/cli.js",
     "test": "npm run build --workspace server && node --test \"server/dist/**/*.test.js\"",
-    "test:watch": "node --test --watch \"server/dist/**/*.test.js\""
+    "test:watch": "node --test --watch \"server/dist/**/*.test.js\"",
+    "test:e2e": "npm run build && playwright test -c e2e/playwright.config.ts"
   },
   "allowScripts": {
     "better-sqlite3@12.11.1": true,
     "esbuild@0.25.12": true
   },
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@playwright/test": "^1.62.1"
+  }
 }

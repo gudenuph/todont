@@ -240,13 +240,18 @@ function LanesTab({ busy, run }: { busy: boolean; run: Runner }) {
                 </button>
               </td>
               <td>
+                {/*
+                  Uncontrolled on purpose. Held in state, typing would update
+                  `lane.label` as you go, and the blur handler would compare the
+                  new value against itself and decide nothing had changed — so
+                  the rename never reached the server. The key remounts the
+                  field when the saved value actually changes.
+                */}
                 <input
+                  key={`${lane.id}:${lane.label}`}
                   type="text"
-                  value={lane.label}
+                  defaultValue={lane.label}
                   disabled={busy}
-                  onChange={(e) =>
-                    setLanes(lanes.map((l) => (l.id === lane.id ? { ...l, label: e.target.value } : l)))
-                  }
                   onBlur={(e) => {
                     const label = e.target.value.trim();
                     if (!label || label === lane.label.trim()) return;
