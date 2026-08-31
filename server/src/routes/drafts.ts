@@ -3,7 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { config } from '../config.js';
 import { db } from '../db.js';
 import { HttpError } from '../auth/identity.js';
-import { DEFAULT_KIND, isKind } from '../columns.js';
+import { defaultKind, isKind } from '../lib/catalog.js';
 import { fingerprintStackTrace, normalizeStackTrace } from '../lib/stacktrace.js';
 import { serializeCard } from '../lib/bugs.js';
 import { findByFingerprint } from './stacktraces.js';
@@ -106,7 +106,7 @@ export async function draftRoutes(app: FastifyInstance): Promise<void> {
     if (!row) throw new HttpError(404, 'That prefilled report has expired — raise it by hand');
 
     const payload = JSON.parse(row.payload) as DraftPayload;
-    const kind = payload.kind && isKind(payload.kind) ? payload.kind : DEFAULT_KIND;
+    const kind = payload.kind && isKind(payload.kind) ? payload.kind : defaultKind();
 
     let knownBug = null;
     if (payload.stackTrace) {

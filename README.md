@@ -7,6 +7,8 @@ comment; managers and admins move cards between columns and merge duplicates; ad
 also manage who is a manager. ezmuze itself and Claude reach the same board through a
 token-authenticated REST API.
 
+**MIT licensed.** See [LICENSE](LICENSE).
+
 ```
 web/     React + Vite single-page board (TypeScript)
 server/  Fastify API + SQLite, and it serves the built SPA in production
@@ -18,9 +20,21 @@ deploy/  the deploy script and the environment template
 
 ## Bugs and feature requests
 
-A feature request is a bug row with `kind: "feature"` — same board, same columns, same
-triage, because the workflow genuinely is the same and a second table would only
-duplicate it. The card carries the type as an emoji in its bottom-right corner: bug or
+**Ticket types are data**, edited from the admin panel: a default install has Bug and
+Feature request, and an instance can rename them, change their emoji, add its own, or
+reshape what each one asks for. A type is a `kind` on the bug row — same board, same
+lanes, same triage — because the workflow genuinely is the same and a second table would
+only duplicate it.
+
+Each type carries its own **scale** (a bug's severity, a request's "how much do you want
+it?"), its own **hidden fields** — the ones that make no sense for it — and its own
+**wording** for the fields that remain. All of it is served by `/api/meta`, so the card,
+the form and the raise menu cannot drift apart.
+
+Types and levels have permanent keys like lanes do, so renaming either moves no tickets.
+Removing a type or a level that holds tickets makes you say where they go, and a type
+that loses its tickets to another carries each one's level across **by position** — the
+same rule as retyping a single ticket. The card carries the type as an emoji in its bottom-right corner: bug or
 feature.
 
 **Raise a bug** in the top bar is a split button; its caret offers the feature request.
@@ -110,12 +124,10 @@ every card, so a board can be read at a glance without opening anything.
 assigned to you — for a reporter that is their own reports, for a manager it is also
 their queue.
 
-**Where it happened** is a picker, not free text: the browser builds (`Web — Chrome`,
-`Edge`, `Firefox`, `Safari`) and the desktop ones (`Windows`, `macOS`, `Linux`), plus
-`Other`. `/api/meta` serves the list. The API still accepts *any* string here — ezmuze
-raises bugs programmatically and knows more about the machine than a picker can say —
-and the dialog keeps an unrecognised value selectable so saving never silently drops
-it.
+**Where it happened** is a picker, not free text, and the list is editable from the admin
+panel. `/api/meta` serves it. The API still accepts *any* string — a client raising bugs
+programmatically knows more about the machine than a picker can say — and the dialog
+keeps an unrecognised value selectable so saving never silently drops it.
 
 Admins promote and demote from the **Users** dialog in the top bar. An admin cannot
 change their own role, and the last admin cannot be demoted — otherwise the instance
@@ -370,8 +382,8 @@ from merged duplicates (`×3`), which count people who reported it by hand.
 
 ### Raising a bug from inside ezmuze
 
-> The app-side brief lives in [`docs/ezmuze-app-integration.md`](docs/ezmuze-app-integration.md) —
-> hand that to whoever implements it in ezmuze studio.
+> The client-side brief lives in [`docs/client-integration.md`](docs/client-integration.md) —
+> hand that to whoever implements reporting inside your application.
 
 The app opens the browser at a report it has already filled in. Two ways in.
 

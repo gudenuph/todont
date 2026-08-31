@@ -52,6 +52,23 @@ export interface AdminColumn {
   bugCount: number;
 }
 
+export interface AdminEnvironment {
+  id: number;
+  label: string;
+  position: number;
+}
+
+export interface AdminLevel extends Level {
+  bugCount: number;
+}
+
+export interface AdminKind extends Omit<ItemKind, 'levels'> {
+  id: number;
+  position: number;
+  bugCount: number;
+  levels: AdminLevel[];
+}
+
 export interface Meta {
   board: BoardSettings;
   columns: BoardColumn[];

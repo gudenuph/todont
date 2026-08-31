@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import type { AdminColumn, AdminUser, BoardSettings } from '../types';
+import { EnvironmentsTab, TypesTab } from './AdminCatalog';
 
-type Tab = 'board' | 'lanes' | 'users';
+type Tab = 'board' | 'lanes' | 'types' | 'environments' | 'users';
 
 /**
  * Everything an instance owner needs and nobody else should have: the board's
@@ -46,7 +47,7 @@ export function Admin({
         </div>
 
         <div className="tabs">
-          {(['board', 'lanes', 'users'] as Tab[]).map((t) => (
+          {(['board', 'lanes', 'types', 'environments', 'users'] as Tab[]).map((t) => (
             <button
               key={t}
               className={`tab${tab === t ? ' active' : ''}`}
@@ -55,7 +56,15 @@ export function Admin({
                 setError('');
               }}
             >
-              {t === 'board' ? 'Board' : t === 'lanes' ? 'Lanes' : 'Users'}
+              {t === 'board'
+                ? 'Board'
+                : t === 'lanes'
+                  ? 'Lanes'
+                  : t === 'types'
+                    ? 'Types'
+                    : t === 'environments'
+                      ? 'Environments'
+                      : 'Users'}
             </button>
           ))}
         </div>
@@ -64,6 +73,8 @@ export function Admin({
           {error ? <div className="error">{error}</div> : null}
           {tab === 'board' ? <BoardTab busy={busy} run={run} /> : null}
           {tab === 'lanes' ? <LanesTab busy={busy} run={run} /> : null}
+          {tab === 'types' ? <TypesTab busy={busy} run={run} /> : null}
+          {tab === 'environments' ? <EnvironmentsTab busy={busy} run={run} /> : null}
           {tab === 'users' ? <UsersTab meId={meId} busy={busy} run={run} /> : null}
         </div>
       </div>

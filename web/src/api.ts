@@ -1,5 +1,7 @@
 import type {
   AdminColumn,
+  AdminEnvironment,
+  AdminKind,
   AuthOptions,
   AdminUser,
   BoardSettings,
@@ -208,6 +210,74 @@ export const api = {
       method: 'POST',
       body: json({ ids }),
     }),
+
+  adminEnvironments: () => call<{ environments: AdminEnvironment[] }>('/api/admin/environments'),
+
+  createEnvironment: (label: string) =>
+    call<{ environments: string[] }>('/api/admin/environments', {
+      method: 'POST',
+      body: json({ label }),
+    }),
+
+  deleteEnvironment: (id: number) =>
+    call<{ ok: true }>(`/api/admin/environments/${id}`, { method: 'DELETE' }),
+
+  reorderEnvironments: (ids: number[]) =>
+    call<{ environments: string[] }>('/api/admin/environments/reorder', {
+      method: 'POST',
+      body: json({ ids }),
+    }),
+
+  adminKinds: () =>
+    call<{ kinds: AdminKind[]; hideableFields: string[]; labelSlots: string[] }>('/api/admin/kinds'),
+
+  createKind: (data: { label: string; emoji?: string }) =>
+    call<{ kind: AdminKind }>('/api/admin/kinds', { method: 'POST', body: json(data) }),
+
+  updateKind: (
+    id: number,
+    data: {
+      label?: string;
+      emoji?: string;
+      article?: string;
+      hiddenFields?: string[];
+      labels?: Record<string, string>;
+    },
+  ) => call<{ kind: AdminKind }>(`/api/admin/kinds/${id}`, { method: 'PATCH', body: json(data) }),
+
+  deleteKind: (id: number, moveTo?: string) =>
+    call<{ ok: true; moved: number }>(
+      `/api/admin/kinds/${id}${moveTo ? `?moveTo=${encodeURIComponent(moveTo)}` : ''}`,
+      { method: 'DELETE' },
+    ),
+
+  createLevel: (kindId: number, data: { label: string; short?: string; color?: string }) =>
+    call<{ kind: AdminKind }>(`/api/admin/kinds/${kindId}/levels`, {
+      method: 'POST',
+      body: json(data),
+    }),
+
+  updateLevel: (
+    kindId: number,
+    levelKey: string,
+    data: { label?: string; short?: string; color?: string },
+  ) =>
+    call<{ kind: AdminKind }>(`/api/admin/kinds/${kindId}/levels/${encodeURIComponent(levelKey)}`, {
+      method: 'PATCH',
+      body: json(data),
+    }),
+
+  reorderLevels: (kindId: number, keys: string[]) =>
+    call<{ kind: AdminKind }>(`/api/admin/kinds/${kindId}/levels/reorder`, {
+      method: 'POST',
+      body: json({ keys }),
+    }),
+
+  deleteLevel: (kindId: number, levelKey: string, moveTo?: string) =>
+    call<{ kind: AdminKind; moved: number }>(
+      `/api/admin/kinds/${kindId}/levels/${encodeURIComponent(levelKey)}${moveTo ? `?moveTo=${encodeURIComponent(moveTo)}` : ''}`,
+      { method: 'DELETE' },
+    ),
 
   deleteColumn: (id: number, moveTo?: string) =>
     call<{ ok: true; deleted: string; moved: number }>(

@@ -1,13 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import { db, logEvent, type BugRow } from '../db.js';
 import {
-  DEFAULT_KIND,
+  defaultKind,
   defaultLevelFor,
   isKind,
   isLevelOf,
   levelsFor,
   translateLevel,
-} from '../columns.js';
+} from '../lib/catalog.js';
 import { intakeColumn } from '../lib/board.js';
 import {
   HttpError,
@@ -120,7 +120,7 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
     const title = text(body.title, MAX_TITLE, 'Title');
     if (!title) throw new HttpError(400, 'Title is required');
 
-    const kind = body.kind ?? DEFAULT_KIND;
+    const kind = body.kind ?? defaultKind();
     if (!isKind(kind)) throw new HttpError(400, `Unknown kind "${kind}"`);
 
     const severity = body.severity ?? defaultLevelFor(kind);

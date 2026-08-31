@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import Database from 'better-sqlite3';
 import { config } from './config.js';
-import { DEFAULT_KIND, SEED_COLUMNS } from './columns.js';
+import { SEED_COLUMNS, SEED_ENVIRONMENTS, SEED_KINDS } from './columns.js';
 
 fs.mkdirSync(config.dataDir, { recursive: true });
 fs.mkdirSync(config.uploadDir, { recursive: true });
@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS bugs (
   expected       TEXT NOT NULL DEFAULT '',
   actual         TEXT NOT NULL DEFAULT '',
   severity       TEXT NOT NULL DEFAULT 'minor',
-  kind           TEXT NOT NULL DEFAULT '${DEFAULT_KIND}',  -- bug | feature
+  kind           TEXT NOT NULL DEFAULT 'bug',   -- fallback; inserts name it
   stack_trace    TEXT NOT NULL DEFAULT '',   -- stored already normalised
   stack_fingerprint TEXT,                    -- sha256 of the normalised trace
   occurrences    INTEGER NOT NULL DEFAULT 1, -- how many times it has been hit
@@ -137,6 +137,41 @@ CREATE TABLE IF NOT EXISTS columns (
   position     INTEGER NOT NULL,
   is_intake    INTEGER NOT NULL DEFAULT 0,
   is_terminal  INTEGER NOT NULL DEFAULT 0
+);
+
+-- Where a bug happened. Free text on the ticket, so removing one never
+-- rewrites history; this is only what the picker offers.
+CREATE TABLE IF NOT EXISTS environments (
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  label     TEXT NOT NULL UNIQUE,
+  position  INTEGER NOT NULL
+);
+
+-- What kind of thing a ticket is: a bug, a feature request, whatever an
+-- instance needs. The key is permanent and held by every ticket; the rest is
+-- presentation and can be edited freely.
+CREATE TABLE IF NOT EXISTS kinds (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  key            TEXT NOT NULL UNIQUE,
+  label          TEXT NOT NULL,
+  emoji          TEXT NOT NULL,
+  article        TEXT NOT NULL,   -- "a bug", for the raise menu
+  hidden_fields  TEXT NOT NULL DEFAULT '[]',  -- JSON array of field names
+  labels         TEXT NOT NULL DEFAULT '{}',  -- JSON of wording overrides
+  position       INTEGER NOT NULL
+);
+
+-- How much a ticket of a given kind matters. Order is meaningful: retyping a
+-- ticket carries its level across by position.
+CREATE TABLE IF NOT EXISTS levels (
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  kind_id   INTEGER NOT NULL REFERENCES kinds(id) ON DELETE CASCADE,
+  key       TEXT NOT NULL,
+  label     TEXT NOT NULL,
+  short     TEXT NOT NULL,
+  color     TEXT NOT NULL,
+  position  INTEGER NOT NULL,
+  UNIQUE (kind_id, key)
 );
 
 -- Instance settings: board name, tagline. Key/value because there are few.
@@ -205,7 +240,7 @@ function addColumnIfMissing(table: string, column: string, definition: string): 
   db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
 }
 
-addColumnIfMissing('bugs', 'kind', `TEXT NOT NULL DEFAULT '${DEFAULT_KIND}'`);
+addColumnIfMissing('bugs', 'kind', `TEXT NOT NULL DEFAULT 'bug'`);
 addColumnIfMissing('users', 'email', `TEXT`);
 addColumnIfMissing('users', 'password_hash', `TEXT`);
 addColumnIfMissing('users', 'email_verified_at', `TEXT`);
@@ -241,6 +276,36 @@ addColumnIfMissing('bugs', 'occurrences', `INTEGER NOT NULL DEFAULT 1`);
 // Not unique: a fingerprint can legitimately appear on a bug and on duplicates
 // merged into it, and the lookup resolves to the one still on the board.
 db.exec(`CREATE INDEX IF NOT EXISTS idx_bugs_fingerprint ON bugs(stack_fingerprint)`);
+
+/** Seeded once, like the lanes, and edited from the admin panel thereafter. */
+if ((db.prepare(`SELECT COUNT(*) AS n FROM environments`).get() as { n: number }).n === 0) {
+  const insert = db.prepare(`INSERT INTO environments (label, position) VALUES (?, ?)`);
+  SEED_ENVIRONMENTS.forEach((label, i) => insert.run(label, (i + 1) * 10));
+}
+
+if ((db.prepare(`SELECT COUNT(*) AS n FROM kinds`).get() as { n: number }).n === 0) {
+  const insertKind = db.prepare(
+    `INSERT INTO kinds (key, label, emoji, article, hidden_fields, labels, position)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  );
+  const insertLevel = db.prepare(
+    `INSERT INTO levels (kind_id, key, label, short, color, position) VALUES (?, ?, ?, ?, ?, ?)`,
+  );
+  SEED_KINDS.forEach((k, i) => {
+    const info = insertKind.run(
+      k.key,
+      k.label,
+      k.emoji,
+      k.article,
+      JSON.stringify(k.hiddenFields),
+      JSON.stringify(k.labels),
+      (i + 1) * 10,
+    );
+    k.levels.forEach((l, j) =>
+      insertLevel.run(Number(info.lastInsertRowid), l.key, l.label, l.short, l.color, (j + 1) * 10),
+    );
+  });
+}
 
 /**
  * Seed the lanes on a brand new database only. An existing instance keeps

@@ -8,7 +8,7 @@ import fastifyStatic from '@fastify/static';
 
 import { config, isProd } from './config.js';
 import { pruneExpired } from './db.js';
-import { ENVIRONMENTS, KINDS } from './columns.js';
+import { listEnvironments, listKinds } from './lib/catalog.js';
 import { boardSettings, listColumns, serializeColumn } from './lib/board.js';
 import { HttpError, resolveActor } from './auth/identity.js';
 import { authRoutes } from './routes/auth.js';
@@ -16,6 +16,7 @@ import { bugRoutes } from './routes/bugs.js';
 import { attachmentRoutes } from './routes/attachments.js';
 import { adminRoutes } from './routes/admin.js';
 import { boardAdminRoutes } from './routes/board-admin.js';
+import { catalogAdminRoutes } from './routes/catalog-admin.js';
 import { versionRoutes, listVersions, serializeVersion, defaultVersion } from './routes/versions.js';
 import { stackTraceRoutes } from './routes/stacktraces.js';
 import { draftRoutes } from './routes/drafts.js';
@@ -87,14 +88,14 @@ app.get('/api/meta', async () => ({
   // the database rather than baked into the bundle.
   board: boardSettings(),
   columns: listColumns().map(serializeColumn),
-  environments: ENVIRONMENTS,
+  environments: listEnvironments(),
   // Versions come from the database, not a constant: the publishing pipeline
   // adds them, so they change without a deploy.
   versions: listVersions().map(serializeVersion),
   defaultVersion: defaultVersion(),
   // Each kind carries its own scale, wording and hidden fields, so the card,
   // the dialog and the raise menu all read from one place.
-  kinds: KINDS,
+  kinds: listKinds(),
   signInProvider: 'ezmuze central',
 }));
 
@@ -105,6 +106,7 @@ await app.register(bugRoutes);
 await app.register(attachmentRoutes);
 await app.register(adminRoutes);
 await app.register(boardAdminRoutes);
+await app.register(catalogAdminRoutes);
 await app.register(versionRoutes);
 await app.register(stackTraceRoutes);
 await app.register(draftRoutes);

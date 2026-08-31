@@ -1320,3 +1320,69 @@ textarea.mono,
 .linkish:hover {
   text-decoration: underline;
 }
+
+/* --------------------------------------------------------- types and levels */
+
+.kind-card {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  margin-bottom: 10px;
+  background: var(--panel);
+}
+
+.kind-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+}
+
+.kind-head input[type='text'] {
+  width: auto;
+  flex: 1;
+  min-width: 0;
+  padding: 5px 8px;
+}
+
+.kind-emoji-input {
+  width: 46px;
+  flex: 0 0 auto;
+  text-align: center;
+  background: var(--backdrop);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  padding: 5px 4px;
+  font-size: 15px;
+}
+
+.kind-head .lane-key {
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+.kind-body {
+  padding: 4px 12px 12px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+  cursor: pointer;
+  margin: 0;
+}
+
+.check input {
+  accent-color: var(--accent);
+  margin: 0;
+  cursor: pointer;
+}

@@ -81,6 +81,7 @@ The full endpoint list is in the main README.
 | `comment_bug` | add to the thread |
 | `delete_bug` / `delete_comment` / `delete_attachment` | permanent, no undo |
 | `list_versions` | the versions reporters can pick |
+| `list_columns` | also returns the ticket types and each one's scale, which an instance can change |
 | `list_assignable` | who a ticket can be assigned to |
 
 ## What this token cannot do

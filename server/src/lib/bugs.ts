@@ -3,7 +3,7 @@ import path from 'node:path';
 import { config } from '../config.js';
 import { db, logEvent, type BugRow, type UserRow } from '../db.js';
 import { HttpError, publicUser } from '../auth/identity.js';
-import { isKind } from '../columns.js';
+import { isKind } from './catalog.js';
 import { isColumn } from './board.js';
 import { allBlockEdges, blockEdgesFor, type BlockEdges } from './blocks.js';
 

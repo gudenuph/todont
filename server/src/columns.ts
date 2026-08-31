@@ -35,7 +35,7 @@ export const SEED_COLUMNS: BoardColumn[] = [
  * — ezmuze raises bugs programmatically and knows more about the machine than a
  * picker can express, and a closed enum would reject that.
  */
-export const ENVIRONMENTS = [
+export const SEED_ENVIRONMENTS = [
   'Web — Chrome',
   'Web — Edge',
   'Web — Firefox',
@@ -75,7 +75,7 @@ export interface Level {
   color: string;
 }
 
-export const KINDS: ItemKind[] = [
+export const SEED_KINDS: ItemKind[] = [
   {
     key: 'bug',
     label: 'Bug',
@@ -117,43 +117,3 @@ export const KINDS: ItemKind[] = [
     ],
   },
 ];
-
-export const KIND_KEYS = KINDS.map((k) => k.key);
-export const DEFAULT_KIND = 'bug';
-
-export function isKind(value: unknown): value is string {
-  return typeof value === 'string' && KIND_KEYS.includes(value);
-}
-
-export function kindOf(key: string): ItemKind | undefined {
-  return KINDS.find((k) => k.key === key);
-}
-
-export function levelsFor(kind: string): Level[] {
-  return kindOf(kind)?.levels ?? [];
-}
-
-/** Every level key across every kind — what the `severity` column may hold. */
-export function isLevelOf(kind: string, level: unknown): level is string {
-  return typeof level === 'string' && levelsFor(kind).some((l) => l.key === level);
-}
-
-/** The middle-ish default: neither "drop everything" nor "barely worth saying". */
-export function defaultLevelFor(kind: string): string {
-  const levels = levelsFor(kind);
-  return levels[Math.min(2, levels.length - 1)]?.key ?? '';
-}
-
-/**
- * Carry a level across when a ticket is retyped. The scales are parallel and
- * ordered the same way, so position survives even though no key does: a major
- * bug becomes a request that would make a big difference, not a reset to the
- * default.
- */
-export function translateLevel(fromKind: string, toKind: string, level: string): string {
-  const from = levelsFor(fromKind);
-  const to = levelsFor(toKind);
-  const index = from.findIndex((l) => l.key === level);
-  if (index < 0) return defaultLevelFor(toKind);
-  return to[Math.min(index, to.length - 1)]?.key ?? defaultLevelFor(toKind);
-}

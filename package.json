@@ -2,7 +2,7 @@
   "name": "todont-tracker",
   "private": true,
   "version": "1.0.0",
-  "description": "Public bug tracker for ezmuze, hosted at bugs.ezmuze.studio",
+  "description": "A small, self-hosted bug tracker: a drag-and-drop board, crash-trace deduplication, and an API for the app you are tracking bugs for.",
   "workspaces": [
     "server",
     "web",
@@ -22,5 +22,6 @@
   "allowScripts": {
     "better-sqlite3@12.11.1": true,
     "esbuild@0.25.12": true
-  }
+  },
+  "license": "MIT"
 }
