@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import Database from 'better-sqlite3';
 import { config } from './config.js';
 import { SEED_COLUMNS, SEED_ENVIRONMENTS, SEED_KINDS } from './columns.js';
+import { isSealed, seal } from './lib/secretbox.js';
 
 fs.mkdirSync(config.dataDir, { recursive: true });
 fs.mkdirSync(config.uploadDir, { recursive: true });
@@ -269,6 +270,28 @@ db.prepare(
   `INSERT OR IGNORE INTO identities (provider, subject, user_id)
    SELECT 'ezmuze', ezmuze_user_id, id FROM users WHERE ezmuze_user_id IS NOT NULL`,
 ).run();
+/**
+ * Seal any ezmuze AuthKey that predates encryption.
+ *
+ * These were stored in the clear when the database never left the machine.
+ * Backups can now be emailed or pushed to a bucket, so a plaintext credential
+ * for somebody's account on another service travels with them. Sealing in
+ * place costs nobody their session.
+ */
+{
+  const plain = db
+    .prepare(`SELECT id, auth_key FROM sessions WHERE auth_key IS NOT NULL`)
+    .all() as Array<{ id: string; auth_key: string }>;
+
+  const stale = plain.filter((row) => !isSealed(row.auth_key));
+  if (stale.length) {
+    const update = db.prepare(`UPDATE sessions SET auth_key = ? WHERE id = ?`);
+    db.transaction(() => {
+      for (const row of stale) update.run(seal(row.auth_key), row.id);
+    })();
+  }
+}
+
 addColumnIfMissing('bugs', 'stack_trace', `TEXT NOT NULL DEFAULT ''`);
 addColumnIfMissing('bugs', 'stack_fingerprint', `TEXT`);
 addColumnIfMissing('bugs', 'occurrences', `INTEGER NOT NULL DEFAULT 1`);

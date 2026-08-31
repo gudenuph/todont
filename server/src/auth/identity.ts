@@ -3,6 +3,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { config } from '../config.js';
 import { settingBool, settingInt, settingList } from '../lib/settings.js';
 import { db, type UserRow } from '../db.js';
+import { seal } from '../lib/secretbox.js';
 
 export const SESSION_COOKIE = 'todont_session';
 
@@ -170,7 +171,9 @@ export function createSession(userId: number, authKey: string | null): string {
   db.prepare(
     `INSERT INTO sessions (id, user_id, auth_key, expires_at)
      VALUES (?, ?, ?, datetime('now', ?))`,
-  ).run(sid, userId, authKey, `+${settingInt('session.days')} days`);
+    // Sealed, not stored: this is a live credential for somebody's account on
+    // another service, and the database now leaves the machine in backups.
+  ).run(sid, userId, authKey === null ? null : seal(authKey), `+${settingInt('session.days')} days`);
   return sid;
 }
 

@@ -705,8 +705,15 @@ do — add it in your own image layer. The hook is off by default on purpose: ad
 a board is not meant to be the same thing as having a shell on the server, and this makes
 it so.
 
-`COOKIE_SECRET` is **not** in the archive, because it is not in the database — it lives in
-the environment file. Losing it signs everyone out. Keep a copy of that separately.
+`COOKIE_SECRET` is **not** in the archive, because it is not in the database — it lives
+in the environment file. Losing it signs everyone out, so keep a copy of it separately.
+
+That exclusion is load-bearing rather than incidental. A federated sign-in leaves a
+credential for that person's account on the other service in `sessions.auth_key`, and
+those are encrypted (AES-256-GCM) under a key derived from `COOKIE_SECRET`. So an
+archive that goes to the wrong mailbox or bucket is a copy of the board, not a set of
+working logins — the key to open them was never in the tarball. A server that cannot
+open one simply skips revalidation rather than failing.
 
 `deploy/backup.sh` still exists for taking one from the host, outside the app, and needs
 no admin account. It is redundant if you have the panel configured.

@@ -19,6 +19,7 @@ import {
 } from '../auth/identity.js';
 import { config } from '../config.js';
 import { settingBool } from '../lib/settings.js';
+import { open } from '../lib/secretbox.js';
 import { createHash, randomBytes } from 'node:crypto';
 import { mailEnabled, resetMail, sendMail, verificationMail } from '../lib/mailer.js';
 import {
@@ -479,11 +480,14 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       .prepare(`SELECT auth_key FROM sessions WHERE id = ?`)
       .get(unsigned.value) as { auth_key: string | null } | undefined;
 
-    if (!row?.auth_key) return { user: publicUser(actor.user), refreshed: false };
+    // An unopenable key (a changed COOKIE_SECRET, a restored-from-elsewhere
+    // row) is not an error: it means we cannot revalidate, so we do not.
+    const authKey = open(row?.auth_key ?? null);
+    if (!authKey) return { user: publicUser(actor.user), refreshed: false };
 
     let auth;
     try {
-      auth = await validateToken(row.auth_key);
+      auth = await validateToken(authKey);
     } catch {
       // Central unreachable: stay signed in on the account we last saw, the way
       // ezmuze studio stays "Offline" rather than signing you out.
