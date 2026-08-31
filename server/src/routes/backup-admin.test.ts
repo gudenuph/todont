@@ -102,6 +102,8 @@ test('old archives are pruned down to the number to keep, oldest first', async (
   // database-only one do not sort against each other by name, so age has to
   // come from the file rather than from the string.
   const dir = path.join(h.dir, 'backups');
+  // Start from a known folder — an earlier test has already left one here.
+  for (const stale of await fs.readdir(dir)) await fs.rm(path.join(dir, stale));
   const aged = [
     ['full-2020-01-01T00-00-00.tar.gz', new Date('2020-01-01')],
     ['database-2021-01-01T00-00-00.tar.gz', new Date('2021-01-01')],

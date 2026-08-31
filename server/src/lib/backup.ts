@@ -61,7 +61,9 @@ export async function createArchive(includeUploads: boolean): Promise<{
   name: string;
   body: Buffer;
 }> {
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  // Milliseconds included, so two runs in the same second are two archives
+  // rather than one silently overwriting the other — on disk and in a bucket.
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 23);
   const work = await fs.mkdtemp(path.join(config.dataDir, '.backup-'));
 
   try {
