@@ -178,6 +178,17 @@ A card counts as updated when **what the card shows** has changed rather than wh
 timestamp has, because `updated_at` is stored to the second and an edit made in the same
 second as the change before it would otherwise slip past unmarked.
 
+**A ticket you have open updates too.** Reading a bug while somebody comments on it
+should not mean reading a stale one, so an open ticket re-reads on the same poll and a
+comment that arrives while you are looking says so before settling down. The one time it
+holds off is while you are editing: replacing a ticket under a half-typed form is worse
+than being a few seconds behind.
+
+**Click an attachment** to see it full size, over the ticket rather than in another tab.
+Escape or the backdrop closes it, the arrow keys walk every image on the ticket — the
+gallery and the thread as one list — and a middle-click or ctrl-click still opens the raw
+file the way it always did.
+
 Two things it will not do. It does not poll while you are dragging — re-rendering the
 board under the pointer would be both wrong and unpleasant — and it does not poll while
 the tab is in the background, though it checks the moment you come back to it. Anyone

@@ -1690,3 +1690,162 @@ label.check {
     opacity: 1;
   }
 }
+
+/* -------------------------------------------------------------- lightbox */
+
+/*
+ * A screenshot is usually the whole point of a report, and a thumbnail the
+ * width of a card is not something you can read an error message off.
+ */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 64px 76px;
+  background: rgba(4, 4, 8, 0.92);
+  animation: lightbox-in 140ms ease-out;
+  cursor: zoom-out;
+}
+
+@keyframes lightbox-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.lightbox-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: var(--radius);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  cursor: default;
+}
+
+.lightbox-close,
+.lightbox-step {
+  position: absolute;
+  border: 1px solid var(--border);
+  background: rgba(20, 20, 26, 0.9);
+  color: var(--text);
+  border-radius: 999px;
+  cursor: pointer;
+  line-height: 1;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
+}
+
+.lightbox-close:hover,
+.lightbox-step:hover {
+  background: var(--raised);
+  border-color: var(--accent);
+}
+
+.lightbox-close {
+  top: 14px;
+  right: 16px;
+  width: 36px;
+  height: 36px;
+  font-size: 22px;
+}
+
+.lightbox-step {
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+  font-size: 28px;
+}
+
+.lightbox-step.prev {
+  left: 14px;
+}
+
+.lightbox-step.next {
+  right: 14px;
+}
+
+.lightbox-caption {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: calc(100% - 96px);
+  padding: 7px 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  background: rgba(20, 20, 26, 0.9);
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: default;
+}
+
+.lightbox-caption span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lightbox-count {
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.lightbox-caption a {
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+/* An image is worth opening; say so on hover. */
+.shot a img,
+.comment-shot a img {
+  cursor: zoom-in;
+}
+
+@media (max-width: 640px) {
+  .lightbox {
+    padding: 44px 12px 70px;
+  }
+
+  .lightbox-step {
+    width: 36px;
+    height: 36px;
+    font-size: 22px;
+  }
+}
+
+/* A comment that arrived while you were reading the ticket. */
+@keyframes comment-arrive {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.comment.just-arrived {
+  animation:
+    comment-arrive 300ms ease-out,
+    ring-new 4s ease-out forwards;
+  border-radius: var(--radius);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lightbox {
+    animation: none;
+  }
+
+  .comment.just-arrived {
+    animation: ring-new 4s ease-out forwards;
+  }
+}

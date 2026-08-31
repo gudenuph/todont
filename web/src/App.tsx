@@ -77,6 +77,8 @@ export function App() {
   const [live, setLive] = useState<LiveSettings>(DEFAULT_LIVE);
   const [changes, setChanges] = useState<Map<number, ChangeKind>>(new Map());
   const [dragging, setDragging] = useState(false);
+  /** Bumped on every poll that found something, so an open ticket re-reads too. */
+  const [liveTick, setLiveTick] = useState(0);
   const bugsRef = useRef<BugCard[]>([]);
   /** The stamp the board on screen corresponds to; set by every read. */
   const stampRef = useRef<string | null>(null);
@@ -149,6 +151,11 @@ export function App() {
       stampRef.current = stamp;
       setBugs(list);
       if (found.size) setChanges(found);
+
+      // The board is not the only thing on screen: a ticket being read has its
+      // own comments and attachments, and a change there does not always show
+      // up as a change to the card.
+      setLiveTick((n) => n + 1);
     } catch {
       /* the board on screen stands until a read succeeds */
     }
@@ -518,6 +525,7 @@ export function App() {
       {openBug !== null ? (
         <BugView
           bugId={openBug}
+          liveTick={liveTick}
           session={session}
           columns={columns}
           environments={meta?.environments ?? []}

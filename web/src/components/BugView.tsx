@@ -11,6 +11,7 @@ import type {
   Version,
 } from '../types';
 import { VersionPicker } from './VersionPicker';
+import { Lightbox, type LightboxImage } from './Lightbox';
 import { levelColor, levelLabel } from '../severity';
 
 /**
@@ -97,6 +98,11 @@ interface Draft {
 
 interface Props {
   bugId: number;
+  /**
+   * Bumped whenever a poll found the board had changed. Reading a ticket while
+   * somebody comments on it should not mean reading a stale one.
+   */
+  liveTick?: number;
   session: Session;
   columns: BoardColumn[];
   environments: string[];
@@ -110,6 +116,7 @@ interface Props {
 
 export function BugView({
   bugId,
+  liveTick = 0,
   session,
   columns,
   environments,
@@ -132,6 +139,10 @@ export function BugView({
   const [draft, setDraft] = useState<Draft | null>(null);
   const [candidates, setCandidates] = useState<BugCard[]>([]);
   const [blockerChoice, setBlockerChoice] = useState('');
+  /** Which attachment is open full size, if any. */
+  const [viewing, setViewing] = useState<number | null>(null);
+  /** Comments that arrived while this ticket was open, so they announce themselves. */
+  const [freshComments, setFreshComments] = useState<Set<number>>(new Set());
 
   const canManage = session.scopes?.includes('manage') ?? false;
   const canWrite = session.scopes?.includes('write') ?? false;
@@ -148,6 +159,19 @@ export function BugView({
   /** Managers can pull anything; everyone else only what they uploaded. */
   const canRemoveAttachment = (uploaderId: number | undefined) =>
     canManage || (uploaderId !== undefined && uploaderId === session.user?.id);
+
+  /**
+   * Every image on the ticket in reading order — the gallery, then the thread —
+   * so opening one and pressing the arrow keys walks all of them rather than
+   * only the group it happened to be in.
+   */
+  const images: LightboxImage[] = bug
+    ? [...bug.attachments, ...bug.comments.flatMap((c) => c.attachments)]
+        .filter((a) => a.mime.startsWith('image/'))
+        .map((a) => ({ url: a.url, name: a.name }))
+    : [];
+
+  const openImage = (url: string) => setViewing(images.findIndex((i) => i.url === url));
 
   function stageForComment(list: FileList | File[]) {
     const staged = [...list]
@@ -179,6 +203,53 @@ export function BugView({
       live = false;
     };
   }, [bugId]);
+
+  /**
+   * Pick up what changed underneath, without the view flinching.
+   *
+   * Deliberately not the loader above: that clears the ticket to null first,
+   * which is right when you open a different one and very wrong here — it
+   * would blank what somebody is reading. Skipped entirely while an edit is
+   * open, because replacing the ticket under a half-typed form is worse than
+   * being a few seconds behind.
+   */
+  useEffect(() => {
+    if (!liveTick || draft !== null) return;
+
+    let live = true;
+    void api
+      .bug(bugId)
+      .then(({ bug: fresh }) => {
+        if (!live) return;
+
+        setBug((current) => {
+          // Anything said while this was open gets a moment of attention.
+          if (current) {
+            const known = new Set(current.comments.map((c) => c.id));
+            const arrived = fresh.comments.filter((c) => !known.has(c.id)).map((c) => c.id);
+            if (arrived.length) setFreshComments(new Set(arrived));
+          }
+          return fresh;
+        });
+      })
+      .catch(() => {
+        /* the ticket on screen stands until a read succeeds */
+      });
+
+    return () => {
+      live = false;
+    };
+    // draft is read, not depended on: finishing an edit should not trigger a
+    // re-read that discards what was just saved.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveTick, bugId]);
+
+  // The highlight is an announcement, not a state.
+  useEffect(() => {
+    if (!freshComments.size) return;
+    const timer = setTimeout(() => setFreshComments(new Set()), 4000);
+    return () => clearTimeout(timer);
+  }, [freshComments]);
 
   useEffect(() => {
     if (!canManage) return;
@@ -292,6 +363,16 @@ export function BugView({
 
   return (
     <div className="scrim" onClick={onClose}>
+      {/*
+        Above the ticket rather than inside it: it covers the screen, and the
+        scrim's own click-to-close must not fire behind it.
+      */}
+      {viewing !== null && viewing >= 0 ? (
+        <div onClick={(e) => e.stopPropagation()}>
+          <Lightbox images={images} index={viewing} onClose={() => setViewing(null)} />
+        </div>
+      ) : null}
+
       <div className="modal wide" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <span className="id" style={{ color: 'var(--text-faint)' }}>
@@ -503,7 +584,22 @@ export function BugView({
                         </div>
                       ) : (
                         <div className="shot" key={a.id} title={a.name}>
-                          <a href={a.url} target="_blank" rel="noreferrer">
+                          {/*
+                            Still an anchor: a middle-click or ctrl-click should
+                            keep working and open the file itself. Only a plain
+                            click is taken over.
+                          */}
+                          <a
+                            href={a.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            onClick={(e) => {
+                              if (!a.mime.startsWith('image/')) return;
+                              if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+                              e.preventDefault();
+                              openImage(a.url);
+                            }}
+                          >
                             {a.mime.startsWith('image/') ? (
                               <img src={a.url} alt={a.name} />
                             ) : (
@@ -648,7 +744,10 @@ export function BugView({
                     </p>
                   ) : (
                     bug.comments.map((c) => (
-                      <div className="comment" key={c.id}>
+                      <div
+                        className={`comment${freshComments.has(c.id) ? ' just-arrived' : ''}`}
+                        key={c.id}
+                      >
                         <div className="comment-head">
                           <b>{c.author?.name ?? 'someone'}</b>
                           {c.author?.isBot ? <span className="pill bot">bot</span> : null}
@@ -685,7 +784,18 @@ export function BugView({
                                 </div>
                               ) : (
                                 <div className="comment-shot" key={a.id} title={a.name}>
-                                  <a href={a.url} target="_blank" rel="noreferrer">
+                                  <a
+                                    href={a.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    onClick={(e) => {
+                                      if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) {
+                                        return;
+                                      }
+                                      e.preventDefault();
+                                      openImage(a.url);
+                                    }}
+                                  >
                                     <img src={a.url} alt={a.name} />
                                   </a>
                                   {canRemoveAttachment(a.uploadedBy?.id) ? (
