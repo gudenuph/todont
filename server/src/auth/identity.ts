@@ -272,6 +272,7 @@ function actorFromToken(req: FastifyRequest): Actor | null {
     ezmuze_user_id: row.ezmuze_user_id,
     email: row.email,
     password_hash: row.password_hash,
+    email_verified_at: row.email_verified_at,
     name: row.name,
     role: row.role,
     is_bot: row.is_bot,
@@ -315,6 +316,15 @@ export function requireActor(req: FastifyRequest): Actor {
 
 export function requireScope(req: FastifyRequest, scope: Scope): Actor {
   const actor = requireActor(req);
+
+  // Reading is public, so this only ever bites on a write.
+  if (scope !== 'read' && needsEmailVerification(actor.user)) {
+    throw new HttpError(
+      403,
+      'Confirm your email address first — check your inbox for the link we sent',
+    );
+  }
+
   if (!actor.scopes.has(scope)) {
     throw new HttpError(
       403,
@@ -343,6 +353,19 @@ export function publicUser(u: UserRow | null | undefined) {
     role: u.role,
     isBot: u.is_bot === 1,
   };
+}
+
+/**
+ * Is this account allowed to write?
+ *
+ * Only local accounts can be unverified — a federated one was vouched for by
+ * its provider — and only when the instance asks for verification at all.
+ */
+export function needsEmailVerification(user: UserRow): boolean {
+  if (!config.requireVerifiedEmail) return false;
+  if (user.is_bot === 1) return false;
+  if (!user.password_hash) return false;
+  return user.email_verified_at === null;
 }
 
 /** Which ways in this instance offers, for the sign-in dialog to render. */

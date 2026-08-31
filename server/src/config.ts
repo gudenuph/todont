@@ -47,6 +47,36 @@ export const config = {
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean),
 
+  /**
+   * Outbound SMTP. Optional: with no host the tracker behaves exactly as it did
+   * before and verification links go to the log instead.
+   *
+   * Gmail wants smtp.gmail.com:465, the full address as the user, and an
+   * **app password** — a normal account password is refused when 2FA is on,
+   * which it is by default.
+   */
+  smtp: {
+    host: env('SMTP_HOST', ''),
+    port: Number(env('SMTP_PORT', '465')),
+    user: env('SMTP_USER', ''),
+    pass: env('SMTP_PASS', ''),
+    secure: env('SMTP_SECURE', '') === '' ? undefined : env('SMTP_SECURE', '') === 'true',
+    from: env('MAIL_FROM', ''),
+    /**
+     * Accept a certificate that does not verify. Only for an internal relay
+     * with a self-signed certificate on a network you trust — the failure it
+     * papers over ("certificate has expired", "self signed certificate") is
+     * otherwise a very cryptic dead end for a self-hoster.
+     */
+    allowInsecureTls: env('SMTP_ALLOW_INSECURE_TLS', 'false') === 'true',
+  },
+
+  /**
+   * Whether an unverified local account may write. False keeps an instance
+   * usable with no mail server at all — people are nudged, not blocked.
+   */
+  requireVerifiedEmail: env('REQUIRE_VERIFIED_EMAIL', 'false') === 'true',
+
   /** ezmuze central. Constants, not settings — see ezmuze-studio docs/services-design.md §2. */
   central: {
     api: 'https://api.ezmuze.co.uk/',

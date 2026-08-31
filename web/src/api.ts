@@ -61,10 +61,25 @@ export const api = {
   authOptions: () => call<AuthOptions>('/api/auth/providers'),
 
   signup: (data: { email: string; password: string; name?: string }) =>
-    call<{ user: User }>('/api/auth/signup', { method: 'POST', body: json(data) }),
+    call<{
+      user: User;
+      verification: { sent: boolean; required: boolean; mailEnabled: boolean };
+    }>('/api/auth/signup', { method: 'POST', body: json(data) }),
 
   login: (data: { email: string; password: string }) =>
     call<{ user: User }>('/api/auth/login', { method: 'POST', body: json(data) }),
+
+  verifyEmail: (token: string) =>
+    call<{ ok: true; user: User | null }>('/api/auth/verify', {
+      method: 'POST',
+      body: json({ token }),
+    }),
+
+  resendVerification: () =>
+    call<{ ok: true; sent?: boolean; alreadyVerified?: boolean; mailEnabled?: boolean }>(
+      '/api/auth/resend-verification',
+      { method: 'POST' },
+    ),
 
   changePassword: (currentPassword: string, newPassword: string) =>
     call<{ ok: true }>('/api/auth/password', {

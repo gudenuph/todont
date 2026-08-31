@@ -64,6 +64,7 @@ export function App() {
   const [raising, setRaising] = useState<PendingRaise | null>(null);
   const [showAdmin, setShowAdmin] = useState(false);
   const [onlyMine, setOnlyMine] = useState(false);
+  const [notice, setNotice] = useState('');
   const [openBug, setOpenBug] = useState<number | null>(bugFromHash());
 
   const canManage = session.scopes?.includes('manage') ?? false;
@@ -104,6 +105,29 @@ export function App() {
     const timer = setTimeout(() => void refresh(query, onlyMine), 250);
     return () => clearTimeout(timer);
   }, [query, onlyMine, refresh]);
+
+  /**
+   * A verification link, followed from whichever device has their mail — often
+   * not the one they signed up on, which is why it needs no session.
+   */
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('verify');
+    if (!token) return;
+
+    history.replaceState(null, '', window.location.pathname + window.location.hash);
+
+    void (async () => {
+      try {
+        await api.verifyEmail(token);
+        setNotice('Your email is confirmed. Thank you.');
+        // They may already be signed in on this device; pick up the new state.
+        await api.me().then(setSession).catch(() => undefined);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'That verification link did not work');
+      }
+    })();
+  }, []);
 
   /**
    * Act on a link from the app, once, on load. Signing in is not required to
@@ -299,6 +323,41 @@ export function App() {
       {error ? (
         <div className="error" style={{ margin: '10px 14px 0' }}>
           {error}
+        </div>
+      ) : null}
+
+      {notice ? (
+        <div className="notice" style={{ margin: '10px 14px 0' }}>
+          {notice}
+        </div>
+      ) : null}
+
+      {session.user && session.email && session.emailVerified === false ? (
+        <div className="notice" style={{ margin: '10px 14px 0' }}>
+          Confirm <b>{session.email}</b> to
+          {session.verificationRequired ? ' raise bugs and comment' : ' finish setting up your account'}.
+          We sent you a link.{' '}
+          <button
+            className="linkish"
+            onClick={() =>
+              void api
+                .resendVerification()
+                .then((r) =>
+                  setNotice(
+                    r.alreadyVerified
+                      ? 'That address is already confirmed.'
+                      : r.sent
+                        ? 'Sent — check your inbox.'
+                        : 'This tracker has no mail server configured; ask an admin for the link.',
+                  ),
+                )
+                .catch((err: unknown) =>
+                  setError(err instanceof Error ? err.message : 'Could not send that'),
+                )
+            }
+          >
+            Send it again
+          </button>
         </div>
       ) : null}
 

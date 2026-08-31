@@ -47,6 +47,16 @@ SESSION_DAYS=30
 #   ezmuze = the ezmuze central handshake
 AUTH_PROVIDERS=local
 ALLOW_SIGNUP=true
+# Outbound mail. Leave SMTP_HOST empty and verification links go to the log
+# instead. Gmail needs an App Password, not your account password.
+SMTP_HOST=
+SMTP_PORT=465
+SMTP_USER=
+SMTP_PASS=
+MAIL_FROM=
+# Stop unconfirmed accounts writing. Leave false with no mail server.
+REQUIRE_VERIFIED_EMAIL=false
+
 ADMIN_EMAILS=
 ADMIN_EZMUZE_USER_IDS=
 MAX_UPLOAD_BYTES=52428800

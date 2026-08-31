@@ -177,6 +177,10 @@ export interface AuthOptions {
 
 export interface Session {
   user: User | null;
+  /** Your own address and its state — never present on anyone else's. */
+  email?: string | null;
+  emailVerified?: boolean;
+  verificationRequired?: boolean;
   scopes?: string[];
   via?: 'session' | 'token';
 }

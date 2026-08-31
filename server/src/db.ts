@@ -35,6 +35,18 @@ CREATE TABLE IF NOT EXISTS identities (
 );
 CREATE INDEX IF NOT EXISTS idx_identities_user ON identities(user_id);
 
+-- One-shot links sent by email. Hashed, like API tokens: a leaked backup or
+-- log line should not hand somebody an account.
+CREATE TABLE IF NOT EXISTS email_tokens (
+  token_hash  TEXT PRIMARY KEY,
+  user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  purpose     TEXT NOT NULL,          -- 'verify' for now; 'reset' fits here too
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  expires_at  TEXT NOT NULL,
+  used_at     TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_email_tokens_user ON email_tokens(user_id, purpose);
+
 CREATE TABLE IF NOT EXISTS sessions (
   id            TEXT PRIMARY KEY,
   user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -196,6 +208,17 @@ function addColumnIfMissing(table: string, column: string, definition: string): 
 addColumnIfMissing('bugs', 'kind', `TEXT NOT NULL DEFAULT '${DEFAULT_KIND}'`);
 addColumnIfMissing('users', 'email', `TEXT`);
 addColumnIfMissing('users', 'password_hash', `TEXT`);
+addColumnIfMissing('users', 'email_verified_at', `TEXT`);
+
+/**
+ * Accounts that existed before verification did are treated as verified.
+ * Introducing a check should never retroactively lock out somebody who signed
+ * up when there was nothing to comply with.
+ */
+db.prepare(
+  `UPDATE users SET email_verified_at = datetime('now')
+   WHERE email IS NOT NULL AND email_verified_at IS NULL AND password_hash IS NOT NULL`,
+).run();
 
 // Emails identify local accounts, but bots and federated users have none, so
 // the constraint has to skip nulls — which a plain UNIQUE column would not.
@@ -249,6 +272,7 @@ export function pruneExpired(): void {
   db.prepare(`DELETE FROM auth_requests WHERE expires_at < datetime('now')`).run();
   db.prepare(`DELETE FROM sessions WHERE expires_at < datetime('now')`).run();
   db.prepare(`DELETE FROM drafts WHERE expires_at < datetime('now')`).run();
+  db.prepare(`DELETE FROM email_tokens WHERE expires_at < datetime('now')`).run();
 }
 
 export interface UserRow {
@@ -257,6 +281,7 @@ export interface UserRow {
   ezmuze_user_id: string | null;
   email: string | null;
   password_hash: string | null;
+  email_verified_at: string | null;
   name: string;
   role: 'user' | 'manager' | 'admin';
   is_bot: number;

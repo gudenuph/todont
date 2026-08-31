@@ -144,11 +144,55 @@ inside the stored hash, so they can be raised later without invalidating anyone.
 - Login answers with **one message for every failure**, so it cannot be used to find out
   who has an account, and it hashes even for an unknown address so a miss is not
   obviously faster to probe. It is rate limited to 20 attempts per 15 minutes.
-- **There is no verification email**, because an instance is not assumed to have anywhere
-  to send from. An address identifies a person; it is not a proven channel and nothing
-  should be trusted because of it.
+- **Email verification** is sent if SMTP is configured — see below.
 - `POST /api/auth/password` changes your own, and needs the current one. Other sessions
   survive it — signing yourself out of your phone for changing a password is rude.
+
+### Email
+
+Optional. With no `SMTP_HOST` the tracker behaves exactly as it did before, and
+verification links are written to the log instead — so a self-hoster with no mail server
+can still finish a signup by copying one out of `docker logs`.
+
+Volume is a handful of messages a day at most, so this is one plain SMTP connection: no
+queue, no worker, no delivery service. **A Gmail account with an app password is a
+perfectly good backend.**
+
+```
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_USER=you@gmail.com
+SMTP_PASS=abcd efgh ijkl mnop     # an App Password, not your account password
+MAIL_FROM=ToDont <you@gmail.com>
+REQUIRE_VERIFIED_EMAIL=true
+```
+
+Gmail refuses a normal account password when 2FA is on, which it is by default. Create an
+**App Password** at <https://myaccount.google.com/apppasswords> and use that. Port 465 is
+implicit TLS; 587 also works and starts plain before upgrading.
+
+`REQUIRE_VERIFIED_EMAIL=true` stops an unconfirmed local account **writing** — reading is
+public anyway, so this only ever bites on raising a bug or commenting. Left false, people
+are nudged with a banner and nothing is blocked, which keeps an instance usable with no
+mail server at all.
+
+Details worth knowing:
+
+- Links are **stored hashed** and are single use, expiring in 24 hours. Asking for a new
+  one kills the old one.
+- **Sending never fails a signup.** A mail server having a bad morning must not cost
+  somebody their account; the failure is logged with the link so it can be recovered by
+  hand.
+- Accounts created before verification existed are treated as verified. Adding a check
+  should not retroactively lock out somebody who signed up when there was nothing to
+  comply with.
+- `SMTP_ALLOW_INSECURE_TLS=true` accepts a certificate that does not verify. Only for an
+  internal relay with a self-signed certificate on a network you trust — the error it
+  papers over is otherwise a very cryptic dead end.
+
+There is still **no password reset**: a user who forgets theirs needs an admin. The
+machinery here covers it (`email_tokens` already carries a `purpose`), so it is a small
+addition rather than a new subsystem.
 
 ### `ezmuze` — the app-connect handshake
 

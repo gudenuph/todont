@@ -18,6 +18,8 @@ import {
   userByEmail,
 } from '../auth/identity.js';
 import { config } from '../config.js';
+import { createHash, randomBytes } from 'node:crypto';
+import { mailEnabled, sendMail, verificationMail } from '../lib/mailer.js';
 import {
   hashPassword,
   normalizeEmail,
@@ -29,6 +31,33 @@ import {
 const HANDSHAKE_TTL = '+10 minutes';
 
 const MAX_NAME = 60;
+const VERIFY_TTL_HOURS = 24;
+
+/**
+ * Mint a one-shot link and send it. Tokens are stored hashed, so the database
+ * — or a backup of it — never holds anything that would let somebody in.
+ *
+ * Any earlier unused token for the same purpose is dropped: asking for a new
+ * link should invalidate the old one, not leave a trail of live ones.
+ */
+async function sendVerification(
+  app: FastifyInstance,
+  user: { id: number; email: string | null; name: string },
+): Promise<boolean> {
+  if (!user.email) return false;
+
+  const token = randomBytes(32).toString('base64url');
+  const hash = createHash('sha256').update(token).digest('hex');
+
+  db.prepare(`DELETE FROM email_tokens WHERE user_id = ? AND purpose = 'verify'`).run(user.id);
+  db.prepare(
+    `INSERT INTO email_tokens (token_hash, user_id, purpose, expires_at)
+     VALUES (?, ?, 'verify', datetime('now', ?))`,
+  ).run(hash, user.id, `+${VERIFY_TTL_HOURS} hours`);
+
+  const link = `${config.publicUrl}/?verify=${token}`;
+  return sendMail(verificationMail(user.email, user.name, link), app.log);
+}
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {
   /** What the sign-in dialog should offer. */
@@ -76,8 +105,15 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       const user = createLocalUser(email, name, await hashPassword(body.password as string));
       setSessionCookie(reply, createSession(user.id, null));
 
-      app.log.info({ userId: user.id, role: user.role }, 'local account created');
-      return reply.code(201).send({ user: publicUser(user) });
+      // Signing up succeeds whether or not the mail goes out. A bad morning at
+      // a mail server must not cost somebody their account.
+      const sent = await sendVerification(app, user);
+
+      app.log.info({ userId: user.id, role: user.role, verificationSent: sent }, 'local account created');
+      return reply.code(201).send({
+        user: publicUser(user),
+        verification: { sent, required: config.requireVerifiedEmail, mailEnabled: mailEnabled() },
+      });
     },
   );
 
@@ -117,6 +153,62 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       setSessionCookie(reply, createSession(user.id, null));
 
       return { user: publicUser(user) };
+    },
+  );
+
+  /**
+   * Confirm an address from the emailed link.
+   *
+   * Needs no session: people open these on whichever device has their mail,
+   * which is often not the one they signed up on.
+   */
+  app.post<{ Body: { token?: string } }>(
+    '/api/auth/verify',
+    { config: { rateLimit: { max: 30, timeWindow: '1 hour' } } },
+    async (req) => {
+      const token = req.body?.token;
+      if (typeof token !== 'string' || !token) throw new HttpError(400, 'token is required');
+
+      const hash = createHash('sha256').update(token).digest('hex');
+      const row = db
+        .prepare(
+          `SELECT * FROM email_tokens
+           WHERE token_hash = ? AND purpose = 'verify'
+             AND used_at IS NULL AND expires_at > datetime('now')`,
+        )
+        .get(hash) as { user_id: number } | undefined;
+
+      if (!row) {
+        throw new HttpError(400, 'That link has already been used, or it has expired');
+      }
+
+      db.prepare(`UPDATE email_tokens SET used_at = datetime('now') WHERE token_hash = ?`).run(hash);
+      db.prepare(
+        `UPDATE users SET email_verified_at = datetime('now') WHERE id = ? AND email_verified_at IS NULL`,
+      ).run(row.user_id);
+
+      const user = db.prepare(`SELECT * FROM users WHERE id = ?`).get(row.user_id) as
+        | { id: number; name: string; role: string; is_bot: number }
+        | undefined;
+
+      app.log.info({ userId: row.user_id }, 'email verified');
+      return { ok: true, user: publicUser(user as never) };
+    },
+  );
+
+  /** Send another link, for the one that went to spam. */
+  app.post(
+    '/api/auth/resend-verification',
+    { config: { rateLimit: { max: 5, timeWindow: '1 hour' } } },
+    async (req) => {
+      const actor = requireActor(req);
+      const user = actor.user;
+
+      if (!user.email) throw new HttpError(409, 'This account has no email address');
+      if (user.email_verified_at) return { ok: true, alreadyVerified: true };
+
+      const sent = await sendVerification(app, user);
+      return { ok: true, sent, mailEnabled: mailEnabled() };
     },
   );
 
@@ -244,10 +336,16 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   /** Who am I? Answers `{ user: null }` for anonymous visitors rather than 401. */
   app.get('/api/me', async (req) => {
     if (!req.actor) return { user: null };
+    const user = req.actor.user;
     return {
-      user: publicUser(req.actor.user),
+      user: publicUser(user),
       via: req.actor.via,
       scopes: [...req.actor.scopes],
+      // Your own address and its state, for you only — publicUser deliberately
+      // carries neither, because it is what everyone sees on a bug.
+      email: user.email,
+      emailVerified: user.email === null || user.email_verified_at !== null,
+      verificationRequired: config.requireVerifiedEmail,
     };
   });
 
