@@ -69,6 +69,18 @@ export const api = {
   login: (data: { email: string; password: string }) =>
     call<{ user: User }>('/api/auth/login', { method: 'POST', body: json(data) }),
 
+  forgotPassword: (email: string) =>
+    call<{ ok: true; message: string }>('/api/auth/forgot', {
+      method: 'POST',
+      body: json({ email }),
+    }),
+
+  resetPassword: (token: string, newPassword: string) =>
+    call<{ ok: true; user: User | null }>('/api/auth/reset', {
+      method: 'POST',
+      body: json({ token, newPassword }),
+    }),
+
   verifyEmail: (token: string) =>
     call<{ ok: true; user: User | null }>('/api/auth/verify', {
       method: 'POST',

@@ -100,3 +100,24 @@ export function verificationMail(to: string, name: string, link: string): Mail {
     ].join('\n'),
   };
 }
+
+export function resetMail(to: string, name: string, link: string): Mail {
+  const board = boardSettings().name;
+  return {
+    to,
+    subject: `Reset your ${board} password`,
+    text: [
+      `Hello ${name},`,
+      '',
+      `Someone asked to reset the ${board} password for this address.`,
+      'Open this link to choose a new one:',
+      '',
+      link,
+      '',
+      'The link works once and expires in an hour.',
+      '',
+      'If it was not you, ignore this — your password has not changed, and',
+      'nobody can do anything with this address without the link.',
+    ].join('\n'),
+  };
+}

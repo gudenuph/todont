@@ -19,7 +19,7 @@ import {
 } from '../auth/identity.js';
 import { config } from '../config.js';
 import { createHash, randomBytes } from 'node:crypto';
-import { mailEnabled, sendMail, verificationMail } from '../lib/mailer.js';
+import { mailEnabled, resetMail, sendMail, verificationMail } from '../lib/mailer.js';
 import {
   hashPassword,
   normalizeEmail,
@@ -32,6 +32,9 @@ const HANDSHAKE_TTL = '+10 minutes';
 
 const MAX_NAME = 60;
 const VERIFY_TTL_HOURS = 24;
+
+/** Shorter than a verification link: this one can take an account over. */
+const RESET_TTL_HOURS = 1;
 
 /**
  * Mint a one-shot link and send it. Tokens are stored hashed, so the database
@@ -209,6 +212,112 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
       const sent = await sendVerification(app, user);
       return { ok: true, sent, mailEnabled: mailEnabled() };
+    },
+  );
+
+  /**
+   * Ask for a reset link.
+   *
+   * Always answers the same, whatever the address turns out to be — an account
+   * that does not exist, or one that only signs in through a provider, must not
+   * be distinguishable from one that got an email.
+   */
+  app.post<{ Body: { email?: string } }>(
+    '/api/auth/forgot',
+    { config: { rateLimit: { max: 5, timeWindow: '1 hour' } } },
+    async (req) => {
+      const answer = {
+        ok: true as const,
+        message: 'If that address has an account here, a link is on its way.',
+      };
+
+      if (!providerEnabled('local')) return answer;
+
+      const email = normalizeEmail(req.body?.email);
+      if (!email) return answer;
+
+      const user = userByEmail(email);
+      if (!user) return answer;
+
+      if (!user.password_hash) {
+        // A federated account has no password to reset. Say nothing different
+        // to the caller; the log is where an admin can see what happened.
+        app.log.info({ userId: user.id }, 'reset asked for an account with no password');
+        return answer;
+      }
+
+      const token = randomBytes(32).toString('base64url');
+      const hash = createHash('sha256').update(token).digest('hex');
+
+      db.prepare(`DELETE FROM email_tokens WHERE user_id = ? AND purpose = 'reset'`).run(user.id);
+      db.prepare(
+        `INSERT INTO email_tokens (token_hash, user_id, purpose, expires_at)
+         VALUES (?, ?, 'reset', datetime('now', ?))`,
+      ).run(hash, user.id, `+${RESET_TTL_HOURS} hours`);
+
+      await sendMail(
+        resetMail(user.email!, user.name, `${config.publicUrl}/?reset=${token}`),
+        app.log,
+      );
+
+      return answer;
+    },
+  );
+
+  /**
+   * Set a new password from the emailed link.
+   *
+   * Unlike a deliberate change, this **ends every other session**. A reset is
+   * what you reach for when you have lost control of an account, so leaving
+   * whoever else was signed in still signed in would defeat the point.
+   *
+   * It also confirms the address: reading the mail proves as much as clicking a
+   * verification link does.
+   */
+  app.post<{ Body: { token?: string; newPassword?: string } }>(
+    '/api/auth/reset',
+    { config: { rateLimit: { max: 10, timeWindow: '1 hour' } } },
+    async (req, reply) => {
+      const token = req.body?.token;
+      if (typeof token !== 'string' || !token) throw new HttpError(400, 'token is required');
+
+      const problem = passwordProblem(req.body?.newPassword);
+      if (problem) throw new HttpError(400, problem);
+
+      const hash = createHash('sha256').update(token).digest('hex');
+      const row = db
+        .prepare(
+          `SELECT * FROM email_tokens
+           WHERE token_hash = ? AND purpose = 'reset'
+             AND used_at IS NULL AND expires_at > datetime('now')`,
+        )
+        .get(hash) as { user_id: number } | undefined;
+
+      if (!row) {
+        throw new HttpError(400, 'That link has already been used, or it has expired');
+      }
+
+      const passwordHash = await hashPassword(req.body!.newPassword as string);
+
+      const apply = db.transaction(() => {
+        db.prepare(`UPDATE email_tokens SET used_at = datetime('now') WHERE token_hash = ?`).run(hash);
+        db.prepare(
+          `UPDATE users SET password_hash = ?,
+             email_verified_at = COALESCE(email_verified_at, datetime('now'))
+           WHERE id = ?`,
+        ).run(passwordHash, row.user_id);
+        db.prepare(`DELETE FROM sessions WHERE user_id = ?`).run(row.user_id);
+      });
+
+      apply();
+
+      const user = db.prepare(`SELECT * FROM users WHERE id = ?`).get(row.user_id) as never;
+
+      // Sign them in on this device, since they have just proved themselves.
+      setSessionCookie(reply, createSession(row.user_id, null));
+      app.log.info({ userId: row.user_id }, 'password reset');
+
+      return { ok: true, user: publicUser(user) };
     },
   );
 

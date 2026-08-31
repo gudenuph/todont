@@ -3,6 +3,7 @@ import { api } from './api';
 import type { AuthOptions, BugCard, BugDetail, Meta, Prefill, Session } from './types';
 import { Board } from './components/Board';
 import { SignIn } from './components/SignIn';
+import { ResetPassword } from './components/ResetPassword';
 import { NewBug } from './components/NewBug';
 import { RaiseButton } from './components/RaiseButton';
 import { BugView } from './components/BugView';
@@ -65,6 +66,9 @@ export function App() {
   const [showAdmin, setShowAdmin] = useState(false);
   const [onlyMine, setOnlyMine] = useState(false);
   const [notice, setNotice] = useState('');
+  const [resetToken, setResetToken] = useState<string | null>(() =>
+    new URLSearchParams(window.location.search).get('reset'),
+  );
   const [openBug, setOpenBug] = useState<number | null>(bugFromHash());
 
   const canManage = session.scopes?.includes('manage') ?? false;
@@ -105,6 +109,13 @@ export function App() {
     const timer = setTimeout(() => void refresh(query, onlyMine), 250);
     return () => clearTimeout(timer);
   }, [query, onlyMine, refresh]);
+
+  // The reset token comes out of the URL immediately: it is single use, and
+  // leaving it in the address bar invites a refresh that wastes it.
+  useEffect(() => {
+    if (!resetToken) return;
+    history.replaceState(null, '', window.location.pathname + window.location.hash);
+  }, [resetToken]);
 
   /**
    * A verification link, followed from whichever device has their mail — often
@@ -382,6 +393,21 @@ export function App() {
         arrived from a crash dialog gets signed in and dropped straight into the
         form, rather than being left on an empty board wondering what happened.
       */}
+      {resetToken ? (
+        <ResetPassword
+          token={resetToken}
+          onCancel={() => setResetToken(null)}
+          onDone={(user) => {
+            setResetToken(null);
+            setNotice('Your password is set, and you are signed in.');
+            void api
+              .me()
+              .then(setSession)
+              .catch(() => setSession({ user }));
+          }}
+        />
+      ) : null}
+
       {signingIn || (raising && !session.user) ? (
         <SignIn
           auth={auth}

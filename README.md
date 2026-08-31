@@ -190,9 +190,23 @@ Details worth knowing:
   internal relay with a self-signed certificate on a network you trust — the error it
   papers over is otherwise a very cryptic dead end.
 
-There is still **no password reset**: a user who forgets theirs needs an admin. The
-machinery here covers it (`email_tokens` already carries a `purpose`), so it is a small
-addition rather than a new subsystem.
+### Forgotten passwords
+
+`POST /api/auth/forgot` emails a link; `POST /api/auth/reset` takes the token and a new
+password. Both are on the sign-in dialog.
+
+- **The answer to "forgot" never varies** — same message for a real address, an unknown
+  one, and an account that only signs in through a provider — so it cannot be used to
+  find out who has an account.
+- A reset link lasts **one hour**, against a verification link's 24: this one can take an
+  account over.
+- **Resetting ends every other session.** Unlike a deliberate password change, which
+  leaves them alone, a reset is what you reach for when you have lost control of an
+  account — leaving whoever else was signed in still signed in would defeat the point.
+- It also **confirms the address**, because reading the mail proves what a verification
+  link proves.
+
+With no SMTP configured the link goes to the log, so an admin can still hand it over.
 
 ### `ezmuze` — the app-connect handshake
 

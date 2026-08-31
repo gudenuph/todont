@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import type { AuthOptions, User } from '../types';
 
-type Mode = 'login' | 'signup' | 'ezmuze';
+type Mode = 'login' | 'signup' | 'ezmuze' | 'forgot';
 
 /**
  * The way in. Which options appear is up to the instance — an install can offer
@@ -30,7 +30,11 @@ export function SignIn({
       <div className="modal narrow" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h2>
-            {mode === 'signup' ? 'Create an account' : 'Sign in'}
+            {mode === 'signup'
+              ? 'Create an account'
+              : mode === 'forgot'
+                ? 'Reset your password'
+                : 'Sign in'}
           </h2>
           <button className="close" onClick={onClose} aria-label="Close">
             ×
@@ -42,12 +46,14 @@ export function SignIn({
 
           {mode === 'ezmuze' ? (
             <EzmuzeHandshake onDone={onDone} />
+          ) : mode === 'forgot' ? (
+            <ForgotForm />
           ) : (
             <LocalForm mode={mode} onDone={onDone} />
           )}
 
           {/* Anything the current mode is not. */}
-          {(hasLocal && hasEzmuze) || (hasLocal && auth.allowSignup) ? (
+          {hasLocal || hasEzmuze ? (
             <div className="signin-alt">
               {mode !== 'ezmuze' && hasEzmuze ? (
                 <button className="linkish" onClick={() => setMode('ezmuze')}>
@@ -59,9 +65,19 @@ export function SignIn({
                   Use an email and password instead
                 </button>
               ) : null}
+              {mode === 'login' && hasLocal ? (
+                <button className="linkish" onClick={() => setMode('forgot')}>
+                  Forgotten your password?
+                </button>
+              ) : null}
               {mode === 'login' && hasLocal && auth.allowSignup ? (
                 <button className="linkish" onClick={() => setMode('signup')}>
                   No account yet? Create one
+                </button>
+              ) : null}
+              {mode === 'forgot' ? (
+                <button className="linkish" onClick={() => setMode('login')}>
+                  Back to signing in
                 </button>
               ) : null}
               {mode === 'signup' ? (
@@ -147,6 +163,53 @@ function LocalForm({ mode, onDone }: { mode: Mode; onDone: (user: User) => void 
 
       <button className="btn primary" type="submit" disabled={busy || !email || !password}>
         {busy ? 'Just a moment…' : signup ? 'Create account' : 'Sign in'}
+      </button>
+    </form>
+  );
+}
+
+/**
+ * Ask for a reset link. The answer is the same whatever the address turns out
+ * to be, so this cannot be used to find out who has an account.
+ */
+function ForgotForm() {
+  const [email, setEmail] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [sent, setSent] = useState('');
+  const [error, setError] = useState('');
+
+  if (sent) return <p className="signin-reason">{sent}</p>;
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        setBusy(true);
+        setError('');
+        void api
+          .forgotPassword(email)
+          .then((r) => setSent(r.message))
+          .catch((err: unknown) =>
+            setError(err instanceof Error ? err.message : 'Could not send that'),
+          )
+          .finally(() => setBusy(false));
+      }}
+    >
+      {error ? <div className="error">{error}</div> : null}
+      <div className="field">
+        <label htmlFor="fp-email">Email</label>
+        <input
+          id="fp-email"
+          type="email"
+          autoComplete="email"
+          autoFocus
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+        <div className="hint">We will send a link to choose a new password.</div>
+      </div>
+      <button className="btn primary" type="submit" disabled={busy || !email}>
+        {busy ? 'Sending…' : 'Send the link'}
       </button>
     </form>
   );
