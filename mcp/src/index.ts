@@ -5,14 +5,16 @@
  * along, and leave the ticket updated.
  *
  * Configure with:
- *   TRACKER_URL    default https://bugs.ezmuze.studio
+ *   TRACKER_URL    default http://127.0.0.1:4310
  *   TRACKER_TOKEN  an API token with read,write,manage (server CLI: `token`)
  */
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 
-const BASE = (process.env.TRACKER_URL ?? 'https://bugs.ezmuze.studio').replace(/\/$/, '');
+// Local by default: a fresh clone should talk to the instance you are
+// running, never to somebody else's board.
+const BASE = (process.env.TRACKER_URL || 'http://127.0.0.1:4310').replace(/\/$/, '');
 const TOKEN = process.env.TRACKER_TOKEN ?? '';
 
 if (!TOKEN) {

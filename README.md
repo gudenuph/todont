@@ -1,11 +1,15 @@
 # ToDont Tracker
 
-The public bug tracker for ezmuze studio, served at **https://bugs.ezmuze.studio**.
+A small, self-hosted bug tracker: a drag-and-drop board, crash-trace deduplication,
+and an API for the app you are tracking bugs for. One container, one SQLite file.
 
-Anyone can read the board. Signing in with an ezmuze account lets you raise bugs and
-comment; managers and admins move cards between columns and merge duplicates; admins
-also manage who is a manager. ezmuze itself and Claude reach the same board through a
+Anyone can read the board. Signing in lets you raise bugs and comment; managers and
+admins move cards between columns and merge duplicates; admins also manage who is a
+manager. Your app and your coding agent reach the same board through a
 token-authenticated REST API.
+
+Built for, and running as, the bug tracker for [ezmuze studio](https://bugs.ezmuze.studio) —
+which is the instance most examples below are written against.
 
 **MIT licensed.** See [LICENSE](LICENSE).
 
@@ -362,7 +366,7 @@ This needs a token with the **`versions`** scope, which is deliberately separate
 could also delete bugs would be far too much authority.
 
 ```bash
-ssh root@your-host 'docker exec todont-tracker   node server/dist/cli.js token "ezmuze-publish"     --scopes read,versions --bot-name "ezmuze publishing" --role manager'
+ssh root@your-host 'docker exec todont-tracker   node server/dist/cli.js token "publishing"     --scopes read,versions --bot-name "Publishing" --role manager'
 ```
 
 `GET /api/versions` is public and returns the list plus the default. **Unreleased** is
@@ -599,27 +603,43 @@ curl -H "Authorization: Bearer ezb_..." localhost:4310/api/me
 
 ## Deploying
 
-The host (your-host) runs every service in Docker, with **Nginx Proxy
-Manager** owning ports 80 and 443. Services publish on the docker bridge address
-`172.17.0.1:<port>`, which the proxy container can reach but the internet cannot,
-and NPM terminates TLS in front. The tracker follows that convention rather than
-installing a system nginx or upgrading the host's Node (still 16).
+Most instances want the quickstart at the top of this file: `docker compose up -d` on
+the machine itself, or the published image. This section is for the shape the tracker
+was first deployed into, because it is a common one — a small VPS already running
+several services in Docker behind one reverse proxy.
 
-DNS: `bugs.ezmuze.studio` is a CNAME to `ezmuze.studio`, an A record to the host.
+In that arrangement the proxy (Nginx Proxy Manager, Caddy, Traefik) owns ports 80 and
+443, and each service publishes on the docker bridge address `172.17.0.1:<port>`, which
+the proxy container can reach but the internet cannot. TLS terminates at the proxy. The
+tracker follows that convention rather than installing a system nginx of its own — and
+it never needs the host's Node, because the app is built inside the container.
+
+DNS: point a record at the host, or a CNAME at something that already resolves to it.
 
 ```bash
-deploy/deploy.sh                      # defaults to root@your-host
+deploy/deploy.sh root@your-host
+```
+
+`deploy/deploy.sh` reads `deploy/.env.local` if it exists, so an instance keeps its own
+target, paths and public URL there rather than in the repo. That file is untracked:
+
+```bash
+TARGET=root@your-host
+SRC_DIR=/opt/todont-tracker           # where the source is copied
+STATE_DIR=/var/lib/todont-tracker     # where the data lives
+BIND_ADDR=172.17.0.1                  # docker bridge, so only the proxy can reach it
+PUBLIC_URL=https://bugs.example.com
 ```
 
 It tars the source over ssh (no rsync on Windows), builds the image on the
 server, and starts the container, then polls `/api/health` and prints the
 container log if it does not come up. On the first run it also writes
-`$STATE_DIR/tracker.env` with a generated `COOKIE_SECRET`;
-later runs leave it alone, because replacing it signs everyone out.
+`$STATE_DIR/tracker.env` with a generated `COOKIE_SECRET`; later runs leave it
+alone, because replacing it signs everyone out.
 
-Two things about this host worth knowing before you debug a failed deploy:
+Two things worth knowing before you debug a failed deploy on a host like this:
 
-- Root's docker config names a `pass` credential store whose GPG key is gone, so
+- If root's docker config names a credential store whose key is missing,
   `docker-compose` aborts before building anything. The deploy points only its
   own commands at an empty `DOCKER_CONFIG`; the machine's real config is
   untouched. Everything here comes from public Docker Hub.
@@ -629,11 +649,11 @@ Two things about this host worth knowing before you debug a failed deploy:
 
 ### Routing
 
-The proxy host entry in Nginx Proxy Manager (admin UI on port 8181):
+The proxy host entry, in Nginx Proxy Manager's terms:
 
 | | |
 |---|---|
-| Domain | `bugs.ezmuze.studio` |
+| Domain | `bugs.example.com` |
 | Scheme | `http` |
 | Forward host | `172.17.0.1` |
 | Forward port | `4310` |

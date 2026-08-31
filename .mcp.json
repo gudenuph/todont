@@ -4,7 +4,7 @@
       "command": "node",
       "args": ["./mcp/dist/index.js"],
       "env": {
-        "TRACKER_URL": "https://bugs.ezmuze.studio",
+        "TRACKER_URL": "${TRACKER_URL:-http://127.0.0.1:4310}",
         "TRACKER_TOKEN": "${TODONT_TOKEN}"
       }
     }

@@ -29,5 +29,14 @@
   "license": "MIT",
   "devDependencies": {
     "@playwright/test": "^1.62.1"
+  },
+  "author": "James Johnston",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gudenuph/todont.git"
+  },
+  "homepage": "https://github.com/gudenuph/todont#readme",
+  "bugs": {
+    "url": "https://github.com/gudenuph/todont/issues"
   }
 }

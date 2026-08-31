@@ -1,7 +1,7 @@
 # Giving Claude access to the board
 
-Everything Claude needs to read the queue at https://bugs.ezmuze.studio, pick work up,
-move it along and keep tickets updated.
+Everything Claude needs to read the queue, pick work up, move it along and keep tickets
+updated.
 
 ## Getting a token
 
@@ -42,8 +42,15 @@ npm install
 npm run build --workspace mcp     # mcp/dist is gitignored, so a fresh clone must build it
 ```
 
-Then set `TODONT_TOKEN` in the environment Claude Code runs in — `.mcp.json` expands it.
-On Windows, `setx TODONT_TOKEN ezb_...` and restart the terminal.
+Then set two variables in the environment Claude Code runs in; `.mcp.json` expands both:
+
+| | |
+|---|---|
+| `TODONT_TOKEN` | the token you just minted |
+| `TRACKER_URL` | the board's address — **defaults to `http://127.0.0.1:4310`**, so set it if the board is not the one you are running locally |
+
+On Windows, `setx TODONT_TOKEN ezb_...` then `setx TRACKER_URL https://bugs.example.com`,
+and restart the terminal.
 
 ## Setup — anywhere else
 
@@ -57,7 +64,7 @@ beyond its own build:
       "command": "node",
       "args": ["/path/to/ToDontTracker/mcp/dist/index.js"],
       "env": {
-        "TRACKER_URL": "https://bugs.ezmuze.studio",
+        "TRACKER_URL": "https://bugs.example.com",
         "TRACKER_TOKEN": "ezb_..."
       }
     }
@@ -70,7 +77,7 @@ beyond its own build:
 Every tool is a thin wrapper over the REST API, so `curl` works just as well:
 
 ```bash
-curl -s https://bugs.ezmuze.studio/api/bugs \
+curl -s "$TRACKER_URL/api/bugs" \
   -H "Authorization: Bearer $TODONT_TOKEN"
 ```
 

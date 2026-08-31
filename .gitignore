@@ -10,8 +10,9 @@ uploads/
 *.db-wal
 *.db-shm
 
-# An instance's own deployment values
+# An instance's own deployment values, and its own runbook
 deploy/.env.local
+deploy/*.local.md
 
 # End-to-end run artefacts
 e2e/.data/
