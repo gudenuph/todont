@@ -133,10 +133,18 @@ The columns, left to right, are `unconfirmed`, `confirmed`, `backlog`, `current-
 
 Reasonable conventions, not enforced by anything:
 
-- Move a ticket to `in-progress` when starting it and assign it to Claude, so it is
+- Move a ticket to `current-focus` when starting it and assign it to Claude, so it is
   visible that something is being worked on rather than silently changing under you.
-- Comment on the ticket with what was actually done, and move it to `in-beta-testing`
-  rather than `shipped` — shipping is a human call.
+- When the work is done and merged, comment with what was actually done and move it to
+  `in-progress` — which the board shows as **In release queue**, and which means exactly
+  that: finished, waiting for a build to carry it out.
+- **Do not move anything to `in-beta-testing` or `shipped` by hand.** The release
+  pipeline empties the release queue into beta when a beta deploys, and beta into
+  shipped when a release goes live. Those columns are a record of what a build actually
+  did, and putting a ticket there before the build has run makes them lie.
+
+  This is why work in progress belongs in `current-focus` and not in the release queue:
+  a beta deploys on every push, and anything sitting in that lane goes out with it.
 - `unconfirmed` is where reporters land. Confirming a bug means reproducing it; do not
   move things out of `unconfirmed` on a guess.
 - Prefer `rejected` over `delete_bug`. Deletion is for spam and mistakes, and it takes
@@ -144,7 +152,7 @@ Reasonable conventions, not enforced by anything:
 - A bug with a rising `occurrences` count is being hit repeatedly by real users, which is
   a stronger priority signal than its severity.
 - Check `blockedBy` before picking work up. A blocked ticket is not ready, however
-  urgent it looks, and moving it to `in-progress` only hides that.
+  urgent it looks, and moving it to `current-focus` only hides that.
 
 Stack traces are visible to this token because it is a manager. They are not visible to
 reporters or to the public, so do not paste one into a comment.
@@ -181,7 +189,7 @@ you what the whole board is waiting on.
 ### Using it when picking work up
 
 - **Check `blockedBy` before starting anything.** A blocked ticket is not ready however
-  urgent it looks, and moving it to `in-progress` only hides that from everyone else.
+  urgent it looks, and moving it to `current-focus` only hides that from everyone else.
 - **A ticket with a long `blocking` list is worth more than its own severity suggests** —
   finishing it releases everything downstream. That is usually a better thing to pick up
   than a slightly worse bug that unblocks nothing.
