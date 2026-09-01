@@ -367,7 +367,7 @@ cookie (the browser) or a token:
 Authorization: Bearer ezb_...
 ```
 
-Tokens carry scopes — `read`, `write`, `manage`, `admin`, `versions` — and act as a user, so their
+Tokens carry scopes — `read`, `write`, `move`, `manage`, `admin`, `versions` — and act as a user, so their
 actions are attributed on the board like anyone else's. A token can never exceed what
 its user's role allows.
 
@@ -420,9 +420,25 @@ This needs a token with the **`versions`** scope, which is deliberately separate
 `manage`: publishing needs to register a release and nothing else, and a CI token that
 could also delete bugs would be far too much authority.
 
+**If your pipeline also walks tickets along** — marks them in beta when a beta goes out,
+shipped when a release does — it needs two more: **`move`**, which permits a lane change
+and nothing else, and **`write`** so it can leave a comment saying why the ticket moved.
+That is the whole set:
+
 ```bash
-ssh root@your-host 'docker exec todont-tracker   node server/dist/cli.js token "publishing"     --scopes read,versions --bot-name "Publishing" --role manager'
+ssh root@your-host 'docker exec todont-tracker   node server/dist/cli.js token "publishing"     --scopes read,versions,move,write --bot-name "Publishing" --role manager'
 ```
+
+Admin → API tokens has a **"Set them for a release pipeline"** link that ticks exactly
+those four.
+
+`move` exists precisely so this does not have to be `manage`. Moving a ticket is what a
+release does; deleting the board is not, and a credential that sits in a file on a build
+runner should not be able to. Reads are public, so a pipeline missing `move` sails
+through every `GET` and fails only on the move itself — and if it treats that failure as
+non-fatal, which a release script reasonably might, it will go on publishing happily
+while nothing on the board ever moves. **If tickets are not moving, check the token's
+scopes first.**
 
 `GET /api/versions` is public and returns the list plus the default. **Unreleased** is
 seeded into the database, always sorts last, is reserved (publishing cannot claim the
@@ -538,7 +554,7 @@ the filled-in form afterwards — the prefill survives the handshake.
 | `GET /api/bugs/:id` | one bug, with comments, attachments, activity, duplicates |
 | `POST /api/bugs` | raise one — `write` |
 | `PATCH /api/bugs/:id` | edit the text — `write` (reporter while untriaged, else `manage`) |
-| `POST /api/bugs/:id/move` | `{status, index?}` — `manage` |
+| `POST /api/bugs/:id/move` | `{status, index?}` — `move` (which `manage` includes) |
 | `POST /api/bugs/:id/merge` | `{intoId}` — `manage` |
 | `POST /api/bugs/:id/unmerge` | — `manage` |
 | `POST /api/bugs/:id/assign` | `{userId\|null}` — `manage` |

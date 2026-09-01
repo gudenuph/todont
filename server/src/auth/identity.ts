@@ -12,8 +12,8 @@ export const SESSION_COOKIE = 'todont_session';
  * publishing pipeline needs to register a release and nothing else, and a CI
  * token that could also delete bugs would be far too much authority.
  */
-export type Scope = 'read' | 'write' | 'manage' | 'admin' | 'versions';
-export const ALL_SCOPES: Scope[] = ['read', 'write', 'manage', 'admin', 'versions'];
+export type Scope = 'read' | 'write' | 'manage' | 'move' | 'admin' | 'versions';
+export const ALL_SCOPES: Scope[] = ['read', 'write', 'manage', 'move', 'admin', 'versions'];
 
 export interface Actor {
   user: UserRow;
@@ -42,9 +42,9 @@ export function newToken(): string {
 function scopesForRole(role: UserRow['role']): Set<Scope> {
   switch (role) {
     case 'admin':
-      return new Set<Scope>(['read', 'write', 'manage', 'admin', 'versions']);
+      return new Set<Scope>(['read', 'write', 'manage', 'move', 'admin', 'versions']);
     case 'manager':
-      return new Set<Scope>(['read', 'write', 'manage', 'versions']);
+      return new Set<Scope>(['read', 'write', 'manage', 'move', 'versions']);
     default:
       return new Set<Scope>(['read', 'write']);
   }
@@ -271,6 +271,11 @@ function actorFromToken(req: FastifyRequest): Actor | null {
   const allowed = scopesForRole(row.role);
   const scopes = new Set<Scope>(granted.filter((s) => allowed.has(s)));
 
+  // `manage` is the larger power and has always included moving. Implying it
+  // here rather than at each call site means every token minted before `move`
+  // existed keeps working exactly as it did.
+  if (scopes.has('manage')) scopes.add('move');
+
   const user: UserRow = {
     id: row.id,
     ezmuze_user_id: row.ezmuze_user_id,
@@ -338,7 +343,10 @@ export function requireScope(req: FastifyRequest, scope: Scope): Actor {
           ? 'Only admins can do that'
           : scope === 'versions'
             ? 'That needs a token with the "versions" scope'
-            : `Missing "${scope}" permission`,
+            : scope === 'move'
+              ? 'That needs a token with the "move" scope — a release pipeline wants ' +
+                'read, versions, move and write'
+              : `Missing "${scope}" permission`,
     );
   }
   return actor;

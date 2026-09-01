@@ -7,10 +7,18 @@ type Runner = (work: () => Promise<unknown>) => Promise<void>;
 const SCOPES = [
   ['read', 'Read the board'],
   ['write', 'Raise tickets and comment'],
+  ['move', 'Move tickets between lanes'],
   ['manage', 'Move, merge, assign, delete'],
   ['versions', 'Register a release'],
   ['admin', 'Everything on this dialog'],
 ] as const;
+
+/**
+ * What a release pipeline needs and no more: register the version, walk its
+ * tickets along, and say why it moved them. Notably not `manage`, which would
+ * also let a leaked CI credential empty the board.
+ */
+const PIPELINE_SCOPES = ['read', 'versions', 'move', 'write'];
 
 /**
  * Machine credentials, so nobody has to reach for a shell to make one.
@@ -167,7 +175,15 @@ export function TokensTab({ busy, run }: { busy: boolean; run: Runner }) {
           ))}
         </div>
         <div className="hint">
-          A token can never do more than its role allows, so pick the narrowest that works.
+          A token can never do more than its role allows, so pick the narrowest that works.{' '}
+          <button
+            type="button"
+            className="linkish"
+            disabled={busy}
+            onClick={() => setScopes([...PIPELINE_SCOPES])}
+          >
+            Set them for a release pipeline
+          </button>
         </div>
       </div>
 

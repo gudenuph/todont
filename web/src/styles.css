@@ -1849,3 +1849,19 @@ label.check {
     animation: ring-new 4s ease-out forwards;
   }
 }
+
+/* A button that reads as a link, inside a hint. */
+.linkish {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.linkish:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

@@ -297,7 +297,11 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
   app.post<{ Params: { id: string }; Body: { status?: string; index?: number } }>(
     '/api/bugs/:id/move',
     async (req) => {
-      const actor = requireScope(req, 'manage');
+      // `move` rather than `manage`: walking a ticket along is what a release
+      // pipeline does, and it should not need the authority to delete the board
+      // in order to do it. Every `manage` token implies `move`, so nothing that
+      // worked before stops working.
+      const actor = requireScope(req, 'move');
       const { status, index } = req.body ?? {};
       if (!status) throw new HttpError(400, 'status is required');
 

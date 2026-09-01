@@ -18,7 +18,8 @@ For working the board, the useful shape is:
 | Role | manager |
 
 That is `read,write,manage` — enough to triage and update tickets, and deliberately not
-enough to manage users, mint tokens or register a release.
+enough to manage users, mint tokens or register a release. `manage` includes `move`, the
+narrower scope a release pipeline gets, so there is nothing extra to tick here.
 
 If the panel is unreachable, the CLI does the same thing:
 
