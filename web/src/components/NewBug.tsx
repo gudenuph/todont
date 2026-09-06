@@ -38,6 +38,10 @@ export function NewBug({
 }) {
   /** The server decides which fields this kind has no use for. */
   const shows = (field: string) => !kind.hiddenFields.includes(field);
+  // The parent is where this is being filed, not something the app knew about
+  // the reporter's setup, so it is kept apart from the fields that get the
+  // "ezmuze filled this in" note.
+  const { parentId, ...appPrefill } = prefill ?? {};
   const labelFor = (field: string, fallback: string) => kind.labels[field] ?? fallback;
   const [title, setTitle] = useState(prefill?.title ?? '');
   const [description, setDescription] = useState(prefill?.description ?? '');
@@ -116,6 +120,7 @@ export function NewBug({
         actual: shows('actual') ? actual : '',
         appVersion: shows('appVersion') ? appVersion : '',
         stackTrace: shows('stackTrace') ? stackTrace : '',
+        ...(parentId !== undefined ? { parentId } : {}),
       });
 
       if (files.length) {
@@ -169,7 +174,24 @@ export function NewBug({
             </div>
           ) : null}
 
-          {prefill && Object.keys(prefill).length ? (
+          {parentId !== undefined ? (
+            <p className="prefill-note">
+              This will be a sub-ticket of{' '}
+              <a
+                href={`#/bug/${parentId}`}
+                onClick={(e) => {
+                  if (!onOpenBug) return;
+                  e.preventDefault();
+                  onOpenBug(parentId);
+                }}
+              >
+                #{parentId}
+              </a>
+              .
+            </p>
+          ) : null}
+
+          {Object.keys(appPrefill).length ? (
             <p className="prefill-note">
               ezmuze filled in what it knew about your setup. Please add what you were doing
               when it happened.

@@ -89,14 +89,15 @@ The full endpoint list is in the main README.
 | | |
 |---|---|
 | `list_columns` | the board's columns, the ticket kinds, each kind's scale and wording |
-| `list_bugs` | filter by `status`, `kind`, `q`, `assigneeId` |
-| `get_bug` | one ticket: description, steps, attachments, comments, activity, duplicates |
+| `list_bugs` | filter by `status`, `kind`, `q`, `assigneeId`, `parentId` |
+| `get_bug` | one ticket: description, steps, attachments, comments, activity, duplicates, parent and sub-tickets |
 | `create_bug` | raise one |
 | `update_bug` | rewrite any descriptive field, severity, or retype it |
 | `move_bug` | to another column, optionally at an index |
 | `merge_bugs` / `unmerge_bug` | mark a duplicate, or split it back out |
 | `assign_bug` | set or clear the assignee |
 | `block_bug` / `unblock_bug` | "this cannot start until that is done"; loops are refused |
+| `set_parent` / `clear_parent` | "this is part of that"; one parent each, loops are refused |
 | `comment_bug` | add to the thread, with images by path if you have any |
 | `delete_bug` / `delete_comment` / `delete_attachment` | permanent, no undo |
 
@@ -197,6 +198,30 @@ you what the whole board is waiting on.
   each ticket it releases. Nobody gets notified otherwise.
 - **Remove a blocker as soon as it stops being true.** A stale block is worse than none:
   it parks work that could have proceeded.
+
+---
+
+## Sub-tickets: "this is part of that"
+
+A parent is an umbrella, not a dependency. Being a sub-ticket says nothing about order —
+use `block_bug` for that. It says the parent is not finished until its parts are.
+
+```
+set_parent({ id: 42, parentId: 7 })     # 42 is part of 7.
+clear_parent({ id: 42 })                # 42 stands on its own again.
+```
+
+One parent each, so `set_parent` replaces whatever parent the ticket had. `create_bug`
+takes `parentId` too, to raise a piece of something straight into place.
+
+`get_bug` returns `parent` (or null), `children` in id order, and `childrenDone` — how
+many of the children sit in a terminal lane. Every card from `list_bugs` carries
+`parentId` and `childCount`, and `list_bugs({ parentId })` lists one ticket's parts.
+
+- **Breaking a big ticket up?** Raise the pieces with `parentId` set, and leave the parent
+  where it is: it is the thing to move to shipped when the last piece lands.
+- **Picking work up from an epic?** Work the children, not the parent. A parent in
+  `current-focus` with nothing done underneath it tells nobody anything.
 
 ### When to use it, and when not to
 

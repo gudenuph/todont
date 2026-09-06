@@ -90,11 +90,13 @@ CREATE TABLE IF NOT EXISTS bugs (
   source         TEXT NOT NULL DEFAULT 'web',   -- web | api
   external_ref   TEXT UNIQUE,                   -- caller's own id, for idempotent raises
   merged_into_id INTEGER REFERENCES bugs(id) ON DELETE SET NULL,
+  parent_id      INTEGER REFERENCES bugs(id) ON DELETE SET NULL,
   created_at     TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_bugs_status ON bugs(status, position);
 CREATE INDEX IF NOT EXISTS idx_bugs_merged ON bugs(merged_into_id);
+CREATE INDEX IF NOT EXISTS idx_bugs_parent ON bugs(parent_id);
 
 CREATE TABLE IF NOT EXISTS attachments (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -314,6 +316,17 @@ addColumnIfMissing('bugs', 'occurrences', `INTEGER NOT NULL DEFAULT 1`);
 // merged into it, and the lookup resolves to the one still on the board.
 db.exec(`CREATE INDEX IF NOT EXISTS idx_bugs_fingerprint ON bugs(stack_fingerprint)`);
 
+/**
+ * A ticket can sit under one other: an epic and its sub-tickets.
+ *
+ * Nullable, one per ticket, and it goes with the parent — deleting the parent
+ * releases the children rather than taking them with it, because they are real
+ * work in their own right, not an aspect of the parent the way a comment is.
+ * No CHECK: cycles and self-reference are refused in the API (lib/parents.ts).
+ */
+addColumnIfMissing('bugs', 'parent_id', `INTEGER REFERENCES bugs(id) ON DELETE SET NULL`);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_bugs_parent ON bugs(parent_id)`);
+
 /** Seeded once, like the lanes, and edited from the admin panel thereafter. */
 if ((db.prepare(`SELECT COUNT(*) AS n FROM environments`).get() as { n: number }).n === 0) {
   const insert = db.prepare(`INSERT INTO environments (label, position) VALUES (?, ?)`);
@@ -423,6 +436,7 @@ export interface BugRow {
   source: string;
   external_ref: string | null;
   merged_into_id: number | null;
+  parent_id: number | null;
   created_at: string;
   updated_at: string;
 }

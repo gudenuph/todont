@@ -26,7 +26,8 @@ interface PendingRaise {
 
 /** Query-string form, for a report small enough to fit in a link. */
 function prefillFromQuery(params: URLSearchParams): Prefill | null {
-  const map: Array<[string, keyof Prefill]> = [
+  // Only the text fields: the parent is chosen on the board, never by a link.
+  const map: Array<[string, Exclude<keyof Prefill, 'parentId'>]> = [
     ['title', 'title'],
     ['description', 'description'],
     ['steps', 'steps'],
@@ -541,6 +542,11 @@ export function App() {
           }}
           onClose={() => openBugById(null)}
           onOpenOther={(id) => openBugById(id)}
+          onRaiseChild={(parent) => {
+            // The form replaces the ticket; raising lands on the new one.
+            openBugById(null);
+            setRaising({ kind: parent.kind, prefill: { parentId: parent.id }, knownBug: null });
+          }}
         />
       ) : null}
 

@@ -4,7 +4,7 @@ import { config } from '../config.js';
 import { db, logEvent, type BugRow, type UserRow } from '../db.js';
 import { HttpError, publicUser } from '../auth/identity.js';
 import { isKind } from './catalog.js';
-import { isColumn } from './board.js';
+import { isColumn, listColumns } from './board.js';
 import { allBlockEdges, blockEdgesFor, type BlockEdges } from './blocks.js';
 
 const POSITION_GAP = 1000;
@@ -44,14 +44,20 @@ const COUNTS = `
   -- and a count that does not match what you then see is worse than no count.
   (SELECT COUNT(*) FROM attachments a WHERE a.bug_id = b.id AND a.comment_id IS NULL)
                                                               AS attachment_count,
-  (SELECT COUNT(*) FROM bugs d WHERE d.merged_into_id = b.id)  AS duplicate_count
+  (SELECT COUNT(*) FROM bugs d WHERE d.merged_into_id = b.id)  AS duplicate_count,
+  -- A merged sub-ticket has left the board, so it is not counted on the parent.
+  (SELECT COUNT(*) FROM bugs k WHERE k.parent_id = b.id AND k.merged_into_id IS NULL)
+                                                              AS child_count
 `;
 
 type CardRow = BugRow & {
   comment_count: number;
   attachment_count: number;
   duplicate_count: number;
+  child_count: number;
 };
+
+type Counts = Pick<CardRow, 'comment_count' | 'attachment_count' | 'duplicate_count' | 'child_count'>;
 
 export function serializeCard(b: CardRow, edges?: BlockEdges) {
   const links = edges ?? blockEdgesFor(b.id);
@@ -73,6 +79,8 @@ export function serializeCard(b: CardRow, edges?: BlockEdges) {
     attachmentCount: b.attachment_count,
     duplicateCount: b.duplicate_count,
     mergedIntoId: b.merged_into_id,
+    parentId: b.parent_id,
+    childCount: b.child_count,
     createdAt: b.created_at,
     updatedAt: b.updated_at,
   };
@@ -137,7 +145,7 @@ function serializeAttachment(a: AttachmentRow) {
 export function serializeDetail(b: BugRow, canSeeStackTrace = false) {
   const counts = db
     .prepare(`SELECT ${COUNTS} FROM bugs b WHERE b.id = ?`)
-    .get(b.id) as Pick<CardRow, 'comment_count' | 'attachment_count' | 'duplicate_count'>;
+    .get(b.id) as Counts;
 
   const attachments = db
     .prepare(`SELECT * FROM attachments WHERE bug_id = ? AND comment_id IS NULL ORDER BY id`)
@@ -165,6 +173,23 @@ export function serializeDetail(b: BugRow, canSeeStackTrace = false) {
   const duplicates = db
     .prepare(`SELECT b.*, ${COUNTS} FROM bugs b WHERE b.merged_into_id = ? ORDER BY b.id`)
     .all(b.id) as CardRow[];
+
+  const children = relatedCards(
+    (
+      db
+        .prepare(`SELECT id FROM bugs WHERE parent_id = ? AND merged_into_id IS NULL ORDER BY id`)
+        .all(b.id) as Array<{ id: number }>
+    ).map((r) => r.id),
+  );
+
+  // "Done" is a terminal lane — shipped, rejected, whatever the instance has
+  // made terminal — so the progress line agrees with the board's own idea of
+  // finished rather than naming lanes that another instance may not have.
+  // On hold is terminal for the board (nothing walks it along) but it is not
+  // finished work, so it does not count towards "N of M done".
+  const done = new Set(
+    listColumns().filter((c) => c.is_terminal && c.key !== 'on-hold').map((c) => c.key),
+  );
 
   return {
     ...serializeCard({ ...b, ...counts }),
@@ -197,6 +222,9 @@ export function serializeDetail(b: BugRow, canSeeStackTrace = false) {
     duplicates: duplicates.map((d) => ({ ...serializeCard(d), description: d.description })),
     blockedBy: relatedCards(blockEdgesFor(b.id).blockedBy),
     blocking: relatedCards(blockEdgesFor(b.id).blocking),
+    parent: b.parent_id === null ? null : (relatedCards([b.parent_id])[0] ?? null),
+    children,
+    childrenDone: children.filter((c) => done.has(c.status)).length,
   };
 }
 
@@ -224,6 +252,8 @@ export interface ListFilters {
   /** "My bugs": raised by this user, or waiting on them. */
   mineUserId?: number;
   includeMerged?: boolean;
+  /** Only the sub-tickets of this one. */
+  parentId?: number;
   limit?: number;
 }
 
@@ -253,6 +283,11 @@ export function listBugs(filters: ListFilters = {}) {
   if (filters.mineUserId !== undefined) {
     where.push('(b.reporter_id = ? OR b.assignee_id = ?)');
     params.push(filters.mineUserId, filters.mineUserId);
+  }
+
+  if (filters.parentId !== undefined) {
+    where.push('b.parent_id = ?');
+    params.push(filters.parentId);
   }
 
   if (filters.q) {

@@ -28,6 +28,7 @@ import {
 } from '../lib/bugs.js';
 import { fingerprintStackTrace, normalizeStackTrace } from '../lib/stacktrace.js';
 import { addBlocker, removeBlocker } from '../lib/blocks.js';
+import { clearParent, requireParentable, setParent } from '../lib/parents.js';
 import { attach, receiveFiles, removeFiles, room, type ReceivedFile } from '../lib/uploads.js';
 import { findByFingerprint, recordOccurrence } from './stacktraces.js';
 
@@ -48,6 +49,13 @@ function text(value: unknown, max: number, field: string): string {
 function bugId(raw: string): number {
   const id = Number(raw);
   if (!Number.isInteger(id) || id < 1) throw new HttpError(400, 'Bug id must be a positive integer');
+  return id;
+}
+
+/** A parent from a body: a ticket number, or null to mean none. */
+function parentIdOf(raw: unknown): number {
+  const id = Number(raw);
+  if (!Number.isInteger(id) || id < 1) throw new HttpError(400, 'parentId must be a ticket number');
   return id;
 }
 
@@ -72,9 +80,11 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
       assignee?: string;
       mine?: string;
       includeMerged?: string;
+      parentId?: string;
     };
   }>('/api/bugs', async (req) => {
     const assignee = req.query.assignee;
+    const parent = req.query.parentId;
 
     // "Only my bugs" needs to know who is asking, so it is the one filter that
     // requires a signed-in caller.
@@ -88,6 +98,7 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
         assigneeId: assignee !== undefined && assignee !== '' ? Number(assignee) : undefined,
         mineUserId: mine,
         includeMerged: req.query.includeMerged === 'true',
+        parentId: parent !== undefined && parent !== '' ? bugId(parent) : undefined,
       }),
       // The stamp these rows correspond to, so a polling client always knows
       // exactly how current what it is showing is. Without it there is a gap
@@ -119,6 +130,7 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
       status?: string;
       kind?: string;
       stackTrace?: string;
+      parentId?: number | null;
     };
   }>('/api/bugs', async (req, reply) => {
     const actor = requireScope(req, 'write');
@@ -182,6 +194,16 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
       status = body.status;
     }
 
+    // Raising straight under a parent — "+ New sub-ticket" — is the same
+    // triage decision as putting an existing ticket there, so the same bar.
+    // Checked before the insert: a bad parent should not leave an orphan.
+    let parentId: number | null = null;
+    if (body.parentId !== undefined && body.parentId !== null) {
+      requireScope(req, 'manage');
+      parentId = parentIdOf(body.parentId);
+      requireParentable(parentId);
+    }
+
     const info = db
       .prepare(
         `INSERT INTO bugs
@@ -211,6 +233,7 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
     const id = Number(info.lastInsertRowid);
     logEvent(id, actor.user.id, 'created', JSON.stringify({ via: actor.via }));
     moveBug(id, status, undefined, actor.user.id);
+    if (parentId !== null) setParent(id, parentId, actor.user.id);
 
     return reply.code(201).send({ bug: serializeDetail(requireBug(id), canSeeStackTrace(req)), created: true });
   });
@@ -226,6 +249,23 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
     const body = req.body ?? {};
     const sets: string[] = [];
     const params: unknown[] = [];
+
+    // Where a ticket sits in the hierarchy is triage, like retyping it. It
+    // logs its own events, so it is applied here rather than folded into the
+    // "edited" one below.
+    let parentChanged = false;
+    if (body.parentId !== undefined) {
+      requireScope(req, 'manage');
+      if (body.parentId === null) {
+        if (bug.parent_id !== null) {
+          clearParent(bug.id, actor.user.id);
+          parentChanged = true;
+        }
+      } else {
+        setParent(bug.id, parentIdOf(body.parentId), actor.user.id);
+        parentChanged = true;
+      }
+    }
 
     const fields: Array<[string, string, number]> = [
       ['title', 'title', MAX_TITLE],
@@ -283,13 +323,22 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
       params.push(raw ? normalizeStackTrace(raw) : '', raw ? fingerprintStackTrace(raw) : null);
     }
 
-    if (!sets.length) return { bug: serializeDetail(bug, canSeeStackTrace(req)) };
+    if (!sets.length) {
+      return {
+        bug: serializeDetail(parentChanged ? requireBug(bug.id) : bug, canSeeStackTrace(req)),
+      };
+    }
 
     sets.push(`updated_at = datetime('now')`);
     params.push(bug.id);
     db.prepare(`UPDATE bugs SET ${sets.join(', ')} WHERE id = ?`).run(...params);
 
-    logEvent(bug.id, actor.user.id, 'edited', JSON.stringify({ fields: Object.keys(body) }));
+    logEvent(
+      bug.id,
+      actor.user.id,
+      'edited',
+      JSON.stringify({ fields: Object.keys(body).filter((k) => k !== 'parentId') }),
+    );
     return { bug: serializeDetail(requireBug(bug.id), canSeeStackTrace(req)) };
   });
 
@@ -362,6 +411,32 @@ export async function bugRoutes(app: FastifyInstance): Promise<void> {
       return { bug: serializeDetail(requireBug(blockedId), canSeeStackTrace(req)) };
     },
   );
+
+  /**
+   * "This is part of that." One parent per ticket, so setting replaces rather
+   * than adds; the same bar as blockers, for the same reason.
+   */
+  app.post<{ Params: { id: string }; Body: { parentId?: number } }>(
+    '/api/bugs/:id/parent',
+    async (req) => {
+      const actor = requireScope(req, 'manage');
+      const childId = bugId(req.params.id);
+      if (req.body?.parentId === undefined || req.body.parentId === null) {
+        throw new HttpError(400, 'parentId is required');
+      }
+
+      setParent(childId, parentIdOf(req.body.parentId), actor.user.id);
+      return { bug: serializeDetail(requireBug(childId), canSeeStackTrace(req)) };
+    },
+  );
+
+  app.delete<{ Params: { id: string } }>('/api/bugs/:id/parent', async (req) => {
+    const actor = requireScope(req, 'manage');
+    const childId = bugId(req.params.id);
+
+    clearParent(childId, actor.user.id);
+    return { bug: serializeDetail(requireBug(childId), canSeeStackTrace(req)) };
+  });
 
   app.post<{ Params: { id: string }; Body: { userId?: number | null } }>(
     '/api/bugs/:id/assign',

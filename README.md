@@ -211,6 +211,20 @@ dims every card that is not holding it up**, so "what is this waiting on?" is an
 pointing rather than by opening anything. Only blocked cards do this — on anything else
 there would be nothing to point at — and never mid-drag.
 
+## Sub-tickets
+
+A ticket can be **part of** one other — an epic and the pieces of it. The parent lists its
+sub-tickets with a progress line ("3 of 7 done", counting the ones in a terminal lane), and
+a sub-ticket links back up. On the board a parent carries a `⊞ 3` badge and a sub-ticket a
+small `↑ #12`.
+
+One parent each, and never a loop: a ticket cannot contain itself, directly or through a
+chain. A merged duplicate can neither hold sub-tickets nor be one. Filing is triage, so it
+needs `manage`, as does **+ New sub-ticket** on a ticket, which opens the raise form already
+filed under it. Deleting a parent releases its sub-tickets rather than taking them with it.
+
+`#123` in a description or comment is a link to that ticket.
+
 ## Roles
 
 | | read | raise & comment | move & merge | manage users |
@@ -550,16 +564,18 @@ the filled-in form afterwards — the prefill survives the handshake.
 | | |
 |---|---|
 | `GET /api/meta` | columns and severities |
-| `GET /api/bugs?status=&kind=&q=&assignee=&mine=&includeMerged=` | the board, plus the `stamp` it corresponds to; `mine=true` needs a signed-in caller |
-| `GET /api/bugs/:id` | one bug, with comments, attachments, activity, duplicates |
-| `POST /api/bugs` | raise one — `write` |
-| `PATCH /api/bugs/:id` | edit the text — `write` (reporter while untriaged, else `manage`) |
+| `GET /api/bugs?status=&kind=&q=&assignee=&mine=&includeMerged=&parentId=` | the board, plus the `stamp` it corresponds to; `mine=true` needs a signed-in caller; `parentId` lists one ticket's sub-tickets |
+| `GET /api/bugs/:id` | one bug, with comments, attachments, activity, duplicates, `parent`, `children` and `childrenDone` |
+| `POST /api/bugs` | raise one — `write`; `parentId` files it under a ticket and needs `manage` |
+| `PATCH /api/bugs/:id` | edit the text — `write` (reporter while untriaged, else `manage`); `parentId` (number or null) needs `manage` |
 | `POST /api/bugs/:id/move` | `{status, index?}` — `move` (which `manage` includes) |
 | `POST /api/bugs/:id/merge` | `{intoId}` — `manage` |
 | `POST /api/bugs/:id/unmerge` | — `manage` |
 | `POST /api/bugs/:id/assign` | `{userId\|null}` — `manage` |
 | `POST /api/bugs/:id/blockers` | `{blockerId}` — `manage` |
 | `DELETE /api/bugs/:id/blockers/:blockerId` | — `manage` |
+| `POST /api/bugs/:id/parent` | `{parentId}` — file it under a ticket, replacing any parent — `manage` |
+| `DELETE /api/bugs/:id/parent` | take it out from under its parent — `manage` |
 | `POST /api/bugs/:id/comments` | `{body}` as JSON, **or** multipart with `body` and files — `write` |
 | `DELETE /api/bugs/:id` | delete a bug outright — `manage` |
 | `DELETE /api/comments/:id` | delete one comment — `manage` |
@@ -633,7 +649,8 @@ upload dies at nginx with a 413 the app never sees.
 
 `mcp/` is an MCP server over the same REST API, registered in `.mcp.json`. It exposes
 `list_bugs`, `get_bug`, `create_bug`, `update_bug`, `move_bug`, `merge_bugs`,
-`unmerge_bug`, `assign_bug`, `comment_bug`, `list_assignable` and `list_columns`, so
+`unmerge_bug`, `assign_bug`, `block_bug`, `unblock_bug`, `set_parent`, `clear_parent`,
+`comment_bug`, `list_assignable` and `list_columns`, so
 Claude can read the queue, pick something up, move it along and keep the ticket
 updated.
 

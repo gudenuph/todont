@@ -164,9 +164,10 @@ server.registerTool(
       q: z.string().optional().describe('Free-text search over title, description and steps'),
       assigneeId: z.number().optional(),
       includeMerged: z.boolean().optional(),
+      parentId: z.number().optional().describe('Only the sub-tickets of this ticket'),
     },
   },
-  async ({ status, kind, q, assigneeId, includeMerged }) => {
+  async ({ status, kind, q, assigneeId, includeMerged, parentId }) => {
     try {
       const qs = new URLSearchParams();
       if (status) qs.set('status', status);
@@ -174,6 +175,7 @@ server.registerTool(
       if (q) qs.set('q', q);
       if (assigneeId !== undefined) qs.set('assignee', String(assigneeId));
       if (includeMerged) qs.set('includeMerged', 'true');
+      if (parentId !== undefined) qs.set('parentId', String(parentId));
       const suffix = qs.toString() ? `?${qs}` : '';
       return reply(await call(`/api/bugs${suffix}`));
     } catch (err) {
@@ -187,7 +189,7 @@ server.registerTool(
   {
     title: 'Read one bug',
     description:
-      'Full detail: description, steps, attachments, comments, activity, duplicates, and what this ticket is blocked by and blocking.',
+      'Full detail: description, steps, attachments, comments, activity, duplicates, what this ticket is blocked by and blocking, its parent ticket and its sub-tickets (with how many are done).',
     inputSchema: { id: z.number().describe('Bug number, as shown on the card') },
   },
   async ({ id }) => {
@@ -225,6 +227,10 @@ server.registerTool(
         .optional()
         .describe('Defaults to "bug". A feature request rides the same board and columns.'),
       externalRef: z.string().optional(),
+      parentId: z
+        .number()
+        .optional()
+        .describe('Raise it as a sub-ticket of this ticket. Needs manage.'),
     },
   },
   async (args) => {
@@ -427,6 +433,47 @@ server.registerTool(
   async ({ id, blockerId }) => {
     try {
       return reply(await call(`/api/bugs/${id}/blockers/${blockerId}`, { method: 'DELETE' }));
+    } catch (err) {
+      return fail(err);
+    }
+  },
+);
+
+server.registerTool(
+  'set_parent',
+  {
+    title: 'File a ticket under a parent',
+    description:
+      '"`id` is part of `parentId`." A ticket has one parent at most, so this replaces any it had. Refused for a merged duplicate, and if it would make a ticket contain itself.',
+    inputSchema: {
+      id: z.number().describe('The sub-ticket'),
+      parentId: z.number().describe('The ticket it is part of'),
+    },
+  },
+  async ({ id, parentId }) => {
+    try {
+      return reply(
+        await call(`/api/bugs/${id}/parent`, {
+          method: 'POST',
+          body: JSON.stringify({ parentId }),
+        }),
+      );
+    } catch (err) {
+      return fail(err);
+    }
+  },
+);
+
+server.registerTool(
+  'clear_parent',
+  {
+    title: 'Take a ticket out from under its parent',
+    description: 'Drop the parent link. The ticket stays; it just stands on its own again.',
+    inputSchema: { id: z.number() },
+  },
+  async ({ id }) => {
+    try {
+      return reply(await call(`/api/bugs/${id}/parent`, { method: 'DELETE' }));
     } catch (err) {
       return fail(err);
     }

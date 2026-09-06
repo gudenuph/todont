@@ -128,6 +128,10 @@ export interface BugCard {
   attachmentCount: number;
   duplicateCount: number;
   mergedIntoId: number | null;
+  /** The ticket this one is part of, if any. */
+  parentId: number | null;
+  /** Sub-tickets still on the board (merged ones are not counted). */
+  childCount: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -171,6 +175,10 @@ export interface RelatedTicket {
 export interface BugDetail extends Omit<BugCard, 'blockedBy' | 'blocking'> {
   blockedBy: RelatedTicket[];
   blocking: RelatedTicket[];
+  parent: RelatedTicket | null;
+  children: RelatedTicket[];
+  /** How many of `children` sit in a terminal lane. */
+  childrenDone: number;
   description: string;
   steps: string;
   expected: string;
@@ -199,6 +207,8 @@ export interface Prefill {
   appVersion?: string;
   environment?: string;
   stackTrace?: string;
+  /** Raise it as a sub-ticket of this one — set by "+ New sub-ticket", never by the app. */
+  parentId?: number;
 }
 
 export interface AuthOptions {

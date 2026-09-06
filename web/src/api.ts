@@ -170,6 +170,15 @@ export const api = {
   removeBlocker: (id: number, blockerId: number) =>
     call<{ bug: BugDetail }>(`/api/bugs/${id}/blockers/${blockerId}`, { method: 'DELETE' }),
 
+  setParent: (id: number, parentId: number) =>
+    call<{ bug: BugDetail }>(`/api/bugs/${id}/parent`, {
+      method: 'POST',
+      body: json({ parentId }),
+    }),
+
+  clearParent: (id: number) =>
+    call<{ bug: BugDetail }>(`/api/bugs/${id}/parent`, { method: 'DELETE' }),
+
   /**
    * One request whether or not there are pictures: multipart when there are,
    * so the comment is never briefly on the board without the screenshot it is

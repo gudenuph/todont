@@ -77,6 +77,14 @@ function describeEvent(type: string, detail: string, label: (key: string) => str
       return `made this block #${String(data.blocked)}`;
     case 'no_longer_blocking':
       return `stopped this blocking #${String(data.blocked)}`;
+    case 'parent_set':
+      return `filed this under #${String(data.parent)}`;
+    case 'parent_cleared':
+      return `took this out from under #${String(data.parent)}`;
+    case 'child_added':
+      return `filed #${String(data.child)} under this`;
+    case 'child_removed':
+      return `took #${String(data.child)} out from under this`;
     case 'comment_deleted':
       return `deleted a comment by ${String(data.author ?? 'someone')}`;
     default:
@@ -112,6 +120,8 @@ interface Props {
   onDeleted: (id: number) => void;
   onClose: () => void;
   onOpenOther: (id: number) => void;
+  /** "+ New sub-ticket": open the raise form, filed under this ticket. */
+  onRaiseChild: (parent: BugDetail) => void;
 }
 
 export function BugView({
@@ -126,6 +136,7 @@ export function BugView({
   onDeleted,
   onClose,
   onOpenOther,
+  onRaiseChild,
 }: Props) {
   const [bug, setBug] = useState<BugDetail | null>(null);
   const [assignable, setAssignable] = useState<User[]>([]);
@@ -139,6 +150,7 @@ export function BugView({
   const [draft, setDraft] = useState<Draft | null>(null);
   const [candidates, setCandidates] = useState<BugCard[]>([]);
   const [blockerChoice, setBlockerChoice] = useState('');
+  const [parentChoice, setParentChoice] = useState('');
   /** Which attachment is open full size, if any. */
   const [viewing, setViewing] = useState<number | null>(null);
   /** Comments that arrived while this ticket was open, so they announce themselves. */
@@ -533,10 +545,20 @@ export function BugView({
                 </div>
               ) : (
                 <>
-                  <Section title={labelFor('description', 'What happened')} body={bug.description} />
-                  {shows('steps') ? <Section title="Steps to reproduce" body={bug.steps} /> : null}
-                  {shows('expected') ? <Section title="Expected" body={bug.expected} /> : null}
-                  {shows('actual') ? <Section title="Actual" body={bug.actual} /> : null}
+                  <Section
+                    title={labelFor('description', 'What happened')}
+                    body={bug.description}
+                    onOpen={onOpenOther}
+                  />
+                  {shows('steps') ? (
+                    <Section title="Steps to reproduce" body={bug.steps} onOpen={onOpenOther} />
+                  ) : null}
+                  {shows('expected') ? (
+                    <Section title="Expected" body={bug.expected} onOpen={onOpenOther} />
+                  ) : null}
+                  {shows('actual') ? (
+                    <Section title="Actual" body={bug.actual} onOpen={onOpenOther} />
+                  ) : null}
                   {shows('stackTrace') && bug.hasStackTrace ? (
                     <div className="detail-section">
                       <h3>Stack trace</h3>
@@ -735,6 +757,104 @@ export function BugView({
                 </div>
               ) : null}
 
+              {bug.parent || bug.children.length || canManage ? (
+                <div className="detail-section">
+                  <h3>Sub-tickets</h3>
+
+                  <div className="kin-group">
+                    <span className="dep-label">Part of</span>
+                    {bug.parent ? (
+                      <div className="dep-list">
+                        <TicketChip
+                          ticket={bug.parent}
+                          onOpen={onOpenOther}
+                          onRemove={
+                            canManage && !busy
+                              ? () => void mutate(() => api.clearParent(bug.id))
+                              : undefined
+                          }
+                        />
+                      </div>
+                    ) : canManage ? (
+                      <div className="dep-add" style={{ marginTop: 0 }}>
+                        <select
+                          aria-label="File under"
+                          value={parentChoice}
+                          disabled={busy || bug.mergedIntoId !== null}
+                          onChange={(e) => setParentChoice(e.target.value)}
+                        >
+                          <option value="">Nothing — stands on its own</option>
+                          {candidates
+                            .filter(
+                              (c) =>
+                                c.id !== bug.id &&
+                                // Its own sub-tickets would only close a loop
+                                // the server refuses.
+                                !bug.children.some((t) => t.id === c.id),
+                            )
+                            .map((c) => (
+                              <option key={c.id} value={c.id}>
+                                #{c.id} — {c.title.slice(0, 60)}
+                              </option>
+                            ))}
+                        </select>
+                        <button
+                          className="btn small"
+                          disabled={busy || !parentChoice}
+                          onClick={() =>
+                            void mutate(async () => {
+                              const result = await api.setParent(bug.id, Number(parentChoice));
+                              setParentChoice('');
+                              return result;
+                            })
+                          }
+                        >
+                          File
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="dep-none">Nothing — stands on its own</span>
+                    )}
+                  </div>
+
+                  <div className="kin-group">
+                    <span className="dep-label">Sub-tickets</span>
+                    {bug.children.length ? (
+                      <div className="dep-list">
+                        {bug.children.map((t) => (
+                          <TicketChip
+                            key={t.id}
+                            ticket={t}
+                            onOpen={onOpenOther}
+                            onRemove={
+                              canManage && !busy
+                                ? () => void mutate(() => api.clearParent(t.id))
+                                : undefined
+                            }
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="dep-none">None</span>
+                    )}
+                  </div>
+
+                  {bug.children.length ? (
+                    <div className="kin-progress">
+                      {bug.childrenDone} of {bug.children.length} done
+                    </div>
+                  ) : null}
+
+                  {canManage && bug.mergedIntoId === null ? (
+                    <div className="dep-add">
+                      <button className="btn small" disabled={busy} onClick={() => onRaiseChild(bug)}>
+                        + New sub-ticket
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
               <div className="detail-section">
                 <h3>Discussion</h3>
                 <div className="thread">
@@ -763,7 +883,7 @@ export function BugView({
                             </button>
                           ) : null}
                         </div>
-                        {c.body ? <p>{c.body}</p> : null}
+                        {c.body ? <p>{linkRefs(c.body, onOpenOther)}</p> : null}
 
                         {c.attachments.length ? (
                           <div className="comment-shots">
@@ -1166,11 +1286,44 @@ function TicketChip({
   );
 }
 
-function Section({ title, body }: { title: string; body: string }) {
+/**
+ * "#123" in plain text becomes a link to that ticket. Text only, no markup:
+ * everything between the numbers is rendered exactly as typed.
+ */
+function linkRefs(text: string, onOpen: (id: number) => void): React.ReactNode[] {
+  return text.split(/(#\d+)/).map((part, i) => {
+    const match = /^#(\d+)$/.exec(part);
+    if (!match) return part;
+    const id = Number(match[1]);
+    return (
+      <a
+        key={i}
+        className="ref-link"
+        href={`#/bug/${id}`}
+        onClick={(e) => {
+          e.preventDefault();
+          onOpen(id);
+        }}
+      >
+        {part}
+      </a>
+    );
+  });
+}
+
+function Section({
+  title,
+  body,
+  onOpen,
+}: {
+  title: string;
+  body: string;
+  onOpen: (id: number) => void;
+}) {
   return (
     <div className="detail-section">
       <h3>{title}</h3>
-      {body.trim() ? <p>{body}</p> : <p className="empty">Not given</p>}
+      {body.trim() ? <p>{linkRefs(body, onOpen)}</p> : <p className="empty">Not given</p>}
     </div>
   );
 }

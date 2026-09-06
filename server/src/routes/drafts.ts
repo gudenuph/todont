@@ -118,6 +118,7 @@ export async function draftRoutes(app: FastifyInstance): Promise<void> {
           comment_count: 0,
           attachment_count: 0,
           duplicate_count: 0,
+          child_count: 0,
         });
       }
     }

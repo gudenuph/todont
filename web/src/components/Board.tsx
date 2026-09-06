@@ -465,6 +465,16 @@ function CardFace({ bug, kind }: { bug: Bug; kind: ItemKind | undefined }) {
             {bug.blockedBy.length > 1 ? ` ×${bug.blockedBy.length}` : ''}
           </span>
         ) : null}
+        {bug.childCount > 0 ? (
+          <span className="pill sub" title={`${bug.childCount} sub-ticket(s)`}>
+            ⊞ {bug.childCount}
+          </span>
+        ) : null}
+        {bug.parentId !== null ? (
+          <span className="pill parent" title={`Part of #${bug.parentId}`}>
+            ↑ #{bug.parentId}
+          </span>
+        ) : null}
         {bug.occurrences > 1 ? (
           <span className="pill hits" title={`Reported automatically ${bug.occurrences} times`}>
             ↻ {bug.occurrences.toLocaleString()}
