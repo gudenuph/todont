@@ -96,7 +96,6 @@ CREATE TABLE IF NOT EXISTS bugs (
 );
 CREATE INDEX IF NOT EXISTS idx_bugs_status ON bugs(status, position);
 CREATE INDEX IF NOT EXISTS idx_bugs_merged ON bugs(merged_into_id);
-CREATE INDEX IF NOT EXISTS idx_bugs_parent ON bugs(parent_id);
 
 CREATE TABLE IF NOT EXISTS attachments (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -325,6 +324,10 @@ db.exec(`CREATE INDEX IF NOT EXISTS idx_bugs_fingerprint ON bugs(stack_fingerpri
  * No CHECK: cycles and self-reference are refused in the API (lib/parents.ts).
  */
 addColumnIfMissing('bugs', 'parent_id', `INTEGER REFERENCES bugs(id) ON DELETE SET NULL`);
+// The index lives here, after the column is guaranteed, and NOT in the schema
+// block above: on an existing database CREATE TABLE IF NOT EXISTS skips the
+// table, so an index there would run against a bugs table that has no
+// parent_id yet and the server would refuse to start.
 db.exec(`CREATE INDEX IF NOT EXISTS idx_bugs_parent ON bugs(parent_id)`);
 
 /** Seeded once, like the lanes, and edited from the admin panel thereafter. */
